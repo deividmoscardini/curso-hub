@@ -85,22 +85,20 @@ function NovaSolicitacao() {
     defaultValues: {
       nome_curso: "",
       instituicao: "",
-      nome_solicitante: perfil?.nome ?? user.email ?? "",
-      email_solicitante: perfil?.email ?? user.email ?? "",
+      nome_solicitante: user.email ?? "",
+      email_solicitante: user.email ?? "",
       justificativa: "",
       disciplinas: [disciplinaVazia],
     },
-    values: perfil
-      ? {
-          nome_curso: form?.getValues?.("nome_curso") ?? "",
-          instituicao: form?.getValues?.("instituicao") ?? "",
-          nome_solicitante: perfil.nome || perfil.email,
-          email_solicitante: perfil.email,
-          justificativa: form?.getValues?.("justificativa") ?? "",
-          disciplinas: form?.getValues?.("disciplinas") ?? [disciplinaVazia],
-        }
-      : undefined,
   });
+
+  // Preenche automaticamente nome/e-mail quando o perfil chega
+  const [preenchido, setPreenchido] = useState(false);
+  if (perfil && !preenchido) {
+    form.setValue("nome_solicitante", perfil.nome || perfil.email);
+    form.setValue("email_solicitante", perfil.email);
+    setPreenchido(true);
+  }
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "disciplinas" });
 
