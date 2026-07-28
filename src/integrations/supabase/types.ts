@@ -14,16 +14,192 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      disciplinas_solicitadas: {
+        Row: {
+          carga_horaria: number
+          criado_em: string
+          data_fim_captacao: string
+          data_inicio_aulas: string
+          data_inicio_captacao: string
+          dia_semana_live: Database["public"]["Enums"]["dia_semana_enum"]
+          dias_lives: number
+          duracao_captacao_dias: number
+          duracao_disciplina_dias: number
+          id: string
+          nome_disciplina: string
+          semana_live: number
+          sequencia_oferta: number
+          solicitacao_id: string
+          tipo: Database["public"]["Enums"]["tipo_disciplina_enum"]
+        }
+        Insert: {
+          carga_horaria: number
+          criado_em?: string
+          data_fim_captacao: string
+          data_inicio_aulas: string
+          data_inicio_captacao: string
+          dia_semana_live: Database["public"]["Enums"]["dia_semana_enum"]
+          dias_lives: number
+          duracao_captacao_dias: number
+          duracao_disciplina_dias: number
+          id?: string
+          nome_disciplina: string
+          semana_live: number
+          sequencia_oferta: number
+          solicitacao_id: string
+          tipo: Database["public"]["Enums"]["tipo_disciplina_enum"]
+        }
+        Update: {
+          carga_horaria?: number
+          criado_em?: string
+          data_fim_captacao?: string
+          data_inicio_aulas?: string
+          data_inicio_captacao?: string
+          dia_semana_live?: Database["public"]["Enums"]["dia_semana_enum"]
+          dias_lives?: number
+          duracao_captacao_dias?: number
+          duracao_disciplina_dias?: number
+          id?: string
+          nome_disciplina?: string
+          semana_live?: number
+          sequencia_oferta?: number
+          solicitacao_id?: string
+          tipo?: Database["public"]["Enums"]["tipo_disciplina_enum"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disciplinas_solicitadas_solicitacao_id_fkey"
+            columns: ["solicitacao_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_abertura_curso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      perfis: {
+        Row: {
+          area: string
+          criado_em: string
+          email: string
+          id: string
+          nome: string
+          papel: Database["public"]["Enums"]["papel_enum"]
+          tipo_area: Database["public"]["Enums"]["tipo_area_enum"]
+        }
+        Insert: {
+          area?: string
+          criado_em?: string
+          email?: string
+          id: string
+          nome?: string
+          papel?: Database["public"]["Enums"]["papel_enum"]
+          tipo_area?: Database["public"]["Enums"]["tipo_area_enum"]
+        }
+        Update: {
+          area?: string
+          criado_em?: string
+          email?: string
+          id?: string
+          nome?: string
+          papel?: Database["public"]["Enums"]["papel_enum"]
+          tipo_area?: Database["public"]["Enums"]["tipo_area_enum"]
+        }
+        Relationships: []
+      }
+      solicitacoes_abertura_curso: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          arquivo_nome_original: string | null
+          arquivo_url: string | null
+          atualizado_em: string
+          criado_em: string
+          email_solicitante: string
+          id: string
+          instituicao: string
+          justificativa: string | null
+          motivo_rejeicao: string | null
+          nome_curso: string
+          nome_solicitante: string
+          solicitante_id: string
+          status: Database["public"]["Enums"]["status_solicitacao_enum"]
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          arquivo_nome_original?: string | null
+          arquivo_url?: string | null
+          atualizado_em?: string
+          criado_em?: string
+          email_solicitante: string
+          id?: string
+          instituicao: string
+          justificativa?: string | null
+          motivo_rejeicao?: string | null
+          nome_curso: string
+          nome_solicitante: string
+          solicitante_id: string
+          status?: Database["public"]["Enums"]["status_solicitacao_enum"]
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          arquivo_nome_original?: string | null
+          arquivo_url?: string | null
+          atualizado_em?: string
+          criado_em?: string
+          email_solicitante?: string
+          id?: string
+          instituicao?: string
+          justificativa?: string | null
+          motivo_rejeicao?: string | null
+          nome_curso?: string
+          nome_solicitante?: string
+          solicitante_id?: string
+          status?: Database["public"]["Enums"]["status_solicitacao_enum"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_abertura_curso_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "perfis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_abertura_curso_solicitante_id_fkey"
+            columns: ["solicitante_id"]
+            isOneToOne: false
+            referencedRelation: "perfis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      tem_papel: {
+        Args: {
+          _papel: Database["public"]["Enums"]["papel_enum"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      dia_semana_enum:
+        | "segunda"
+        | "terca"
+        | "quarta"
+        | "quinta"
+        | "sexta"
+        | "sabado"
+      papel_enum: "solicitante" | "aprovador"
+      status_solicitacao_enum: "pendente" | "aprovado" | "rejeitado"
+      tipo_area_enum: "interna" | "externa"
+      tipo_disciplina_enum: "com_pre_requisito" | "sem_pre_requisito"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +326,19 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      dia_semana_enum: [
+        "segunda",
+        "terca",
+        "quarta",
+        "quinta",
+        "sexta",
+        "sabado",
+      ],
+      papel_enum: ["solicitante", "aprovador"],
+      status_solicitacao_enum: ["pendente", "aprovado", "rejeitado"],
+      tipo_area_enum: ["interna", "externa"],
+      tipo_disciplina_enum: ["com_pre_requisito", "sem_pre_requisito"],
+    },
   },
 } as const
