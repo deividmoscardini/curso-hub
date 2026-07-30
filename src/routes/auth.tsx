@@ -20,7 +20,7 @@ export const Route = createFileRoute("/auth")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
     const { data } = await supabase.auth.getSession();
-    if (data.session) throw redirect({ to: "/solicitacoes" });
+    if (data.session) throw redirect({ to: "/calendario" });
   },
   component: AuthPage,
 });
@@ -34,7 +34,7 @@ function AuthPage() {
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) navigate({ to: "/solicitacoes" });
+      if (session) navigate({ to: "/calendario" });
     });
     return () => data.subscription.unsubscribe();
   }, [navigate]);
@@ -48,7 +48,7 @@ function AuthPage() {
       toast.error("Não foi possível entrar", { description: error.message });
       return;
     }
-    navigate({ to: "/solicitacoes" });
+    navigate({ to: "/calendario" });
   };
 
   const handleSignup = async (e: React.FormEvent) => {
