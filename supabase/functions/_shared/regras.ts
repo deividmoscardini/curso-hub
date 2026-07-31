@@ -16,7 +16,27 @@
  * sempre editorial (docx seção 8.3).
  */
 import { type ISODate, addDays, workday, HolidayCalendar } from "./feriados.ts";
-import { type CursoMaster } from "./cursosMaster.ts";
+
+// CursoMaster tinha uma dependencia externa em cursosMaster.ts. Como a fonte
+// da verdade agora e o banco (tabelas cursos + disciplinas), inline aqui.
+export interface DisciplinaCarrossel {
+  ordem: number;
+  disciplina: string | null;
+  codigoDisciplina: string | null;
+  tipoOferta: string | null;
+  ch: number | null;
+  liveEstudoCasoOffset: number | null;
+  liveFechamentoOffset: number | null;
+}
+export interface CursoMaster {
+  sigla: string;
+  curso: string;
+  diaSemanaDefault: "quinta" | "quarta";
+  paCh: number;
+  paAnosElegiveis: number[];
+  paCodigoPrefixo: string;
+  carrossel: DisciplinaCarrossel[];
+}
 
 const CAL = new HolidayCalendar();
 
