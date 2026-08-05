@@ -15,6 +15,9 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCalendarioIndexRouteImport } from './routes/_authenticated/calendario.index'
 import { Route as AuthenticatedProdutosIndexRouteImport } from './routes/_authenticated/produtos.index'
 import { Route as AuthenticatedSolicitacoesIndexRouteImport } from './routes/_authenticated/solicitacoes.index'
+import { Route as AuthenticatedAdminUsuariosIndexRouteImport } from './routes/_authenticated/admin.usuarios.index'
+import { Route as AuthenticatedAdminUsuariosIdRouteImport } from './routes/_authenticated/admin.usuarios.$id'
+import { Route as AuthenticatedAdminUsuariosPendentesRouteImport } from './routes/_authenticated/admin.usuarios.pendentes'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -48,6 +51,24 @@ const AuthenticatedSolicitacoesIndexRoute =
     path: '/solicitacoes/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminUsuariosIndexRoute =
+  AuthenticatedAdminUsuariosIndexRouteImport.update({
+    id: '/admin/usuarios/',
+    path: '/admin/usuarios/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminUsuariosIdRoute =
+  AuthenticatedAdminUsuariosIdRouteImport.update({
+    id: '/admin/usuarios/$id',
+    path: '/admin/usuarios/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminUsuariosPendentesRoute =
+  AuthenticatedAdminUsuariosPendentesRouteImport.update({
+    id: '/admin/usuarios/pendentes',
+    path: '/admin/usuarios/pendentes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -55,6 +76,9 @@ export interface FileRoutesByFullPath {
   '/calendario/': typeof AuthenticatedCalendarioIndexRoute
   '/produtos/': typeof AuthenticatedProdutosIndexRoute
   '/solicitacoes/': typeof AuthenticatedSolicitacoesIndexRoute
+  '/admin/usuarios/$id': typeof AuthenticatedAdminUsuariosIdRoute
+  '/admin/usuarios/pendentes': typeof AuthenticatedAdminUsuariosPendentesRoute
+  '/admin/usuarios/': typeof AuthenticatedAdminUsuariosIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +86,9 @@ export interface FileRoutesByTo {
   '/calendario': typeof AuthenticatedCalendarioIndexRoute
   '/produtos': typeof AuthenticatedProdutosIndexRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesIndexRoute
+  '/admin/usuarios/$id': typeof AuthenticatedAdminUsuariosIdRoute
+  '/admin/usuarios/pendentes': typeof AuthenticatedAdminUsuariosPendentesRoute
+  '/admin/usuarios': typeof AuthenticatedAdminUsuariosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,12 +98,31 @@ export interface FileRoutesById {
   '/_authenticated/calendario/': typeof AuthenticatedCalendarioIndexRoute
   '/_authenticated/produtos/': typeof AuthenticatedProdutosIndexRoute
   '/_authenticated/solicitacoes/': typeof AuthenticatedSolicitacoesIndexRoute
+  '/_authenticated/admin/usuarios/$id': typeof AuthenticatedAdminUsuariosIdRoute
+  '/_authenticated/admin/usuarios/pendentes': typeof AuthenticatedAdminUsuariosPendentesRoute
+  '/_authenticated/admin/usuarios/': typeof AuthenticatedAdminUsuariosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/calendario/' | '/produtos/' | '/solicitacoes/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/calendario/'
+    | '/produtos/'
+    | '/solicitacoes/'
+    | '/admin/usuarios/$id'
+    | '/admin/usuarios/pendentes'
+    | '/admin/usuarios/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/calendario' | '/produtos' | '/solicitacoes'
+  to:
+    | '/'
+    | '/auth'
+    | '/calendario'
+    | '/produtos'
+    | '/solicitacoes'
+    | '/admin/usuarios/$id'
+    | '/admin/usuarios/pendentes'
+    | '/admin/usuarios'
   id:
     | '__root__'
     | '/'
@@ -85,6 +131,9 @@ export interface FileRouteTypes {
     | '/_authenticated/calendario/'
     | '/_authenticated/produtos/'
     | '/_authenticated/solicitacoes/'
+    | '/_authenticated/admin/usuarios/$id'
+    | '/_authenticated/admin/usuarios/pendentes'
+    | '/_authenticated/admin/usuarios/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -137,6 +186,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSolicitacoesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/usuarios/': {
+      id: '/_authenticated/admin/usuarios/'
+      path: '/admin/usuarios'
+      fullPath: '/admin/usuarios/'
+      preLoaderRoute: typeof AuthenticatedAdminUsuariosIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/usuarios/$id': {
+      id: '/_authenticated/admin/usuarios/$id'
+      path: '/admin/usuarios/$id'
+      fullPath: '/admin/usuarios/$id'
+      preLoaderRoute: typeof AuthenticatedAdminUsuariosIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/usuarios/pendentes': {
+      id: '/_authenticated/admin/usuarios/pendentes'
+      path: '/admin/usuarios/pendentes'
+      fullPath: '/admin/usuarios/pendentes'
+      preLoaderRoute: typeof AuthenticatedAdminUsuariosPendentesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -144,12 +214,19 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCalendarioIndexRoute: typeof AuthenticatedCalendarioIndexRoute
   AuthenticatedProdutosIndexRoute: typeof AuthenticatedProdutosIndexRoute
   AuthenticatedSolicitacoesIndexRoute: typeof AuthenticatedSolicitacoesIndexRoute
+  AuthenticatedAdminUsuariosIdRoute: typeof AuthenticatedAdminUsuariosIdRoute
+  AuthenticatedAdminUsuariosPendentesRoute: typeof AuthenticatedAdminUsuariosPendentesRoute
+  AuthenticatedAdminUsuariosIndexRoute: typeof AuthenticatedAdminUsuariosIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCalendarioIndexRoute: AuthenticatedCalendarioIndexRoute,
   AuthenticatedProdutosIndexRoute: AuthenticatedProdutosIndexRoute,
   AuthenticatedSolicitacoesIndexRoute: AuthenticatedSolicitacoesIndexRoute,
+  AuthenticatedAdminUsuariosIdRoute: AuthenticatedAdminUsuariosIdRoute,
+  AuthenticatedAdminUsuariosPendentesRoute:
+    AuthenticatedAdminUsuariosPendentesRoute,
+  AuthenticatedAdminUsuariosIndexRoute: AuthenticatedAdminUsuariosIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

@@ -8,11 +8,15 @@ export type PapelTenant =
   | "solicitante_externo"
   | "visualizador";
 
+export type StatusUsuario = "pendente" | "aprovado" | "rejeitado";
+
 export interface Perfil {
   id: string;
   nome: string;
   email: string;
   admin_global: boolean;
+  status: StatusUsuario;
+  motivo_rejeicao: string | null;
 }
 
 export interface Membro {

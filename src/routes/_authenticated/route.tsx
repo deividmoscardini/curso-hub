@@ -18,10 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, FileText, Package, ScrollText, LogOut } from "lucide-react";
+import { CalendarDays, FileText, Package, ScrollText, LogOut, Users } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { TenantContext, type Perfil, type PapelTenant, type Membro } from "@/contexts/tenant";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Clock, XCircle } from "lucide-react";
 export { useTenant } from "@/contexts/tenant";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -45,7 +47,7 @@ function AuthenticatedLayout() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("perfis")
-        .select("id, nome, email, admin_global")
+        .select("id, nome, email, admin_global, status, motivo_rejeicao")
         .eq("id", user.id)
         .maybeSingle();
       if (error) throw error;
@@ -104,6 +106,12 @@ function AuthenticatedLayout() {
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const podeEditar = perfil?.admin_global || ["owner", "editor"].includes(papel ?? "");
   const podeSolicitar = perfil?.admin_global || !!papel;
+
+  // Guard de status: pendente ou rejeitado nao acessa nada.
+  // admin_global bypassa (evita cadeado se algum dia tudo travar).
+  if (perfil && !perfil.admin_global && perfil.status !== "aprovado") {
+    return <StatusBloqueio perfil={perfil} onSignOut={handleSignOut} />;
+  }
 
   return (
     <TenantContext.Provider value={{ tenantId, tenants: membros ?? [], perfil: perfil ?? null, papel, loading: perfilLoading || membrosLoading }}>
@@ -195,14 +203,24 @@ function AuthenticatedLayout() {
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                       {perfil?.admin_global && (
-                        <SidebarMenuItem>
-                          <SidebarMenuButton asChild isActive={isActive("/auditoria")}>
-                            <Link to="/auditoria">
-                              <ScrollText />
-                              <span>Auditoria</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
+                        <>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/usuarios")}>
+                              <Link to="/admin/usuarios">
+                                <Users />
+                                <span>Usuários</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/auditoria")}>
+                              <Link to="/auditoria">
+                                <ScrollText />
+                                <span>Auditoria</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        </>
                       )}
                     </SidebarMenu>
                   </SidebarGroupContent>
@@ -244,5 +262,40 @@ function AuthenticatedLayout() {
         </div>
       </SidebarProvider>
     </TenantContext.Provider>
+  );
+}
+
+// Tela mostrada quando o user esta pendente/rejeitado — bloqueia todas as
+// rotas autenticadas. Sair volta pra /auth.
+function StatusBloqueio({ perfil, onSignOut }: { perfil: Perfil; onSignOut: () => void }) {
+  const isPendente = perfil.status === "pendente";
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+      <Card className="max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {isPendente ? <Clock className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
+          </div>
+          <CardTitle>
+            {isPendente ? "Aguardando aprovação" : "Cadastro rejeitado"}
+          </CardTitle>
+          <CardDescription>
+            {isPendente
+              ? "Sua conta foi criada e aguarda a aprovação de um administrador. Você receberá acesso assim que for autorizado."
+              : perfil.motivo_rejeicao
+                ? `Motivo: ${perfil.motivo_rejeicao}`
+                : "Entre em contato com o administrador da plataforma."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 text-center">
+          <div className="text-xs text-muted-foreground">
+            Você está logado como <span className="font-medium">{perfil.email}</span>.
+          </div>
+          <Button variant="outline" size="sm" onClick={onSignOut}>
+            Sair
+          </Button>
+        </CardContent>
+      </Card>
+    </main>
   );
 }
