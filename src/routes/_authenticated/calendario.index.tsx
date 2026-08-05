@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "./route";
+import { useTenant } from "@/contexts/tenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +37,7 @@ const ABA_LABEL: Record<Aba, string> = {
 };
 
 function CalendarioPage() {
-  const { tenantId } = useTenant();
+  const { tenantId, tenants, loading } = useTenant();
   const [aba, setAba] = useState<Aba>("disciplinas");
   const [busca, setBusca] = useState("");
   const [anoFiltro, setAnoFiltro] = useState<string>("");
@@ -101,13 +101,23 @@ function CalendarioPage() {
     return Object.keys(primeiraDados).slice(0, 8);
   }, [filtradas]);
 
-  if (!tenantId) {
+  if (loading) {
+    return (
+      <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>
+    );
+  }
+  if (tenants.length === 0) {
     return (
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
-          Selecione um produto no menu lateral para ver o calendário.
+          Você ainda não é membro de nenhum produto. Peça a um administrador da +A pra ser adicionado.
         </CardContent>
       </Card>
+    );
+  }
+  if (!tenantId) {
+    return (
+      <Card><CardContent className="pt-6 text-sm text-muted-foreground">Selecione um produto no menu lateral…</CardContent></Card>
     );
   }
 

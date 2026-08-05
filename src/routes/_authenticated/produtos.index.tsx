@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "./route";
+import { useTenant } from "@/contexts/tenant";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +54,7 @@ async function contagens(tenantIds: string[]): Promise<ContagemTenant[]> {
 
 function ProdutosPage() {
   const qc = useQueryClient();
-  const { perfil } = useTenant();
+  const { perfil, loading } = useTenant();
 
   const { data: tenants } = useQuery({
     queryKey: ["tenants-admin"],
@@ -74,6 +74,13 @@ function ProdutosPage() {
     enabled: !!tenants && tenants.length > 0,
   });
 
+  if (loading) {
+    return (
+      <div className="max-w-2xl">
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>
+      </div>
+    );
+  }
   if (!perfil?.admin_global) {
     return (
       <div className="max-w-2xl">

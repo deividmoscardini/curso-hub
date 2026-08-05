@@ -221,6 +221,7 @@ function extrairLinhasGenerico(
   tenantId: string,
   cursosPorCodigo: Map<string, string>,
   chaveFn: (row: Record<string, unknown>, i: number) => { chave: string; ordem: number; ano: number; codigo: string | null } | null,
+  headerRow: number = 0, // 0 = primeira linha; 1 = pula uma linha de agrupamento
 ): LinhaBanco[] {
   let sheet: XLSX.WorkSheet | undefined;
   for (const n of nomesPossiveis) {
@@ -228,7 +229,7 @@ function extrairLinhasGenerico(
   }
   if (!sheet) return [];
 
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true, range: headerRow });
   const linhas: LinhaBanco[] = [];
 
   for (const [i, raw] of rows.entries()) {
@@ -315,19 +316,22 @@ Deno.serve(async (req: Request) => {
       },
     );
 
-    // 4. PA
+    // 4. PA — aceita variacoes de "CÓD. DO CURSO"
     const linhasPA = extrairLinhasGenerico(
       wb, ["Projeto de Aplicação", "Projeto de Aplicacao"], "projeto_aplicacao", tenant_id, cursosPorCodigo,
       (row) => {
         const ano = normalizarInt(row["ANO"]);
-        const codigo = normalizarString(row["CÓD CURSO"] ?? row["COD CURSO"]);
+        const codigo = normalizarString(
+          row["CÓD CURSO"] ?? row["COD CURSO"] ??
+          row["CÓD. DO CURSO"] ?? row["COD. DO CURSO"]
+        );
         const oferta = normalizarInt(row["OFERTA"] ?? row["Nº OFERTA"] ?? row["N OFERTA"]);
         if (!ano || !codigo || oferta == null) return null;
         return { chave: `pa-${ano}-${codigo}-${oferta}`, ordem: oferta, ano, codigo };
       },
     );
 
-    // 5. Prova Substitutiva
+    // 5. Prova Substitutiva — linha 0 e agrupamento, linha 1 sao os headers reais
     const linhasProva = extrairLinhasGenerico(
       wb, ["Prova Substitutiva"], "prova_substitutiva", tenant_id, cursosPorCodigo,
       (row, i) => {
@@ -336,17 +340,20 @@ Deno.serve(async (req: Request) => {
         if (!ano || oferta == null) return null;
         return { chave: `prova_sub-${ano}-${oferta}`, ordem: oferta, ano, codigo: null };
       },
+      1, // headerRow=1
     );
 
-    // 6. Fechamento
+    // 6. Fechamento — linha 0 e agrupamento, linha 1 sao os headers reais
     const linhasFech = extrairLinhasGenerico(
       wb, ["Fechamento de turmas"], "fechamento", tenant_id, cursosPorCodigo,
       (row, i) => {
         const ano = normalizarInt(row["ANO"]);
         const oferta = normalizarInt(row["OFERTA"] ?? row["Nº OFERTA"] ?? row["N OFERTA"]);
-        if (!ano || oferta == null) return null;
-        return { chave: `fechamento-${ano}-${oferta}`, ordem: oferta, ano, codigo: null };
+        // Fechamento so tem ANO por linha (nao tem OFERTA explicito), usa ordem sequencial
+        if (!ano) return null;
+        return { chave: `fechamento-${ano}-${oferta ?? i+1}`, ordem: oferta ?? i+1, ano, codigo: null };
       },
+      1, // headerRow=1
     );
 
     // Upsert em lotes

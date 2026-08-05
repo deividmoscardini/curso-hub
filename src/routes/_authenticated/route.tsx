@@ -20,27 +20,9 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, FileText, Package, ScrollText, LogOut } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
-import { useEffect, useState, createContext, useContext } from "react";
-
-type Perfil = { id: string; nome: string; email: string; admin_global: boolean };
-type PapelTenant = "owner" | "aprovador" | "editor" | "solicitante_interno" | "solicitante_externo" | "visualizador";
-type Membro = {
-  tenant_id: string;
-  papel: PapelTenant;
-  tenants: { id: string; slug: string; nome: string; brand_slug: string } | null;
-};
-
-interface TenantCtx {
-  tenantId: string | null;
-  tenants: Membro[];
-  perfil: Perfil | null;
-  papel: PapelTenant | null;
-}
-
-const TenantContext = createContext<TenantCtx>({
-  tenantId: null, tenants: [], perfil: null, papel: null,
-});
-export const useTenant = () => useContext(TenantContext);
+import { useEffect, useState } from "react";
+import { TenantContext, type Perfil, type PapelTenant, type Membro } from "@/contexts/tenant";
+export { useTenant } from "@/contexts/tenant";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -58,7 +40,7 @@ function AuthenticatedLayout() {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  const { data: perfil } = useQuery({
+  const { data: perfil, isLoading: perfilLoading } = useQuery({
     queryKey: ["perfil", user.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -71,7 +53,7 @@ function AuthenticatedLayout() {
     },
   });
 
-  const { data: membros } = useQuery({
+  const { data: membros, isLoading: membrosLoading } = useQuery({
     queryKey: ["membros", user.id],
     queryFn: async () => {
       // admin_global vê todos os tenants; membro comum vê os seus
@@ -124,7 +106,7 @@ function AuthenticatedLayout() {
   const podeSolicitar = perfil?.admin_global || !!papel;
 
   return (
-    <TenantContext.Provider value={{ tenantId, tenants: membros ?? [], perfil: perfil ?? null, papel }}>
+    <TenantContext.Provider value={{ tenantId, tenants: membros ?? [], perfil: perfil ?? null, papel, loading: perfilLoading || membrosLoading }}>
       <SidebarProvider>
         <div className="flex min-h-screen w-full">
           <Sidebar collapsible="icon">
