@@ -244,7 +244,36 @@ Deno.serve(async (req: Request) => {
         const { error: eDisc } = await sbAdmin.from("disciplinas").insert(disciplinasRows);
         if (eDisc) return json(500, { error: `Falha ao criar disciplinas: ${eDisc.message}` });
       }
-      logDepois = { curso_id: cursoIns.id, codigo: cursoIns.codigo, disciplinas: discs.length };
+
+      // Se o wizard incluiu prévia (o motor rodou pra gerar as ofertas do
+      // ano de estreia junto com o cadastro), grava as linhas em
+      // calendario_linhas apontando pro novo curso_id.
+      let linhasGravadas = 0;
+      const previaLinhas = ((solTyped.previa as { linhas?: unknown[] } | null)?.linhas) ?? [];
+      if (previaLinhas.length > 0 && solTyped.aba === "disciplinas" && solTyped.ano) {
+        const rows = (previaLinhas as any[]).map((linha) => {
+          const { conflitos, ...dados } = linha;
+          return {
+            tenant_id: solicitacao.tenant_id,
+            aba: "disciplinas",
+            ano: solTyped.ano!,
+            ordem: parseInt((linha.entrada as string).replace("E", ""), 10),
+            curso_id: cursoIns.id,
+            disciplina_id: null,
+            chave_natural: `disciplinas-${solTyped.ano}-${cursoIns.codigo}-${linha.entrada}-${linha.ordem}`,
+            dados, conflitos: conflitos ?? {},
+          };
+        });
+        const { error: eLinhas } = await sbAdmin.from("calendario_linhas")
+          .upsert(rows, { onConflict: "tenant_id,chave_natural" });
+        if (eLinhas) return json(500, { error: `Falha ao gravar ofertas: ${eLinhas.message}` });
+        linhasGravadas = rows.length;
+      }
+
+      logDepois = {
+        curso_id: cursoIns.id, codigo: cursoIns.codigo,
+        disciplinas: discs.length, ofertas_geradas: linhasGravadas,
+      };
     } else if (solTyped.tipo === "reordenar_carrossel") {
       const payload = (solTyped.payload ?? {}) as any;
       if (!payload.curso_id || !Array.isArray(payload.ordem_final)) {

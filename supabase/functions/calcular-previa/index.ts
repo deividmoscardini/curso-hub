@@ -47,6 +47,10 @@ interface Body {
   termino_captacao_e1?: string;
   n_ofertas?: number;
   dias_i?: number;
+  // Passar CursoMaster inline quando o curso ainda não existe no banco
+  // (ex.: prévia do wizard "abertura de novo curso"). Se presente, evita
+  // consulta ao banco.
+  curso_master?: CursoMaster;
 }
 
 async function buscarCursoMasterNoBanco(
@@ -119,12 +123,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // disciplinas e projeto_aplicacao precisam do curso
-    if (!body.tenant_id || !body.cod_curso) {
-      return json(400, { error: "tenant_id e cod_curso obrigatórios pra essa aba" });
+    // disciplinas e projeto_aplicacao precisam do curso — vem inline
+    // (fluxo de novo curso) ou é buscado do banco (curso já existente).
+    if (!body.cod_curso) return json(400, { error: "cod_curso obrigatório pra essa aba" });
+    let curso: CursoMaster | null = body.curso_master ?? null;
+    if (!curso) {
+      if (!body.tenant_id) return json(400, { error: "tenant_id obrigatório (ou envie curso_master inline)" });
+      curso = await buscarCursoMasterNoBanco(authHeader, body.tenant_id, body.cod_curso);
+      if (!curso) return json(404, { error: `Curso ${body.cod_curso} não encontrado no tenant` });
     }
-    const curso = await buscarCursoMasterNoBanco(authHeader, body.tenant_id, body.cod_curso);
-    if (!curso) return json(404, { error: `Curso ${body.cod_curso} não encontrado no tenant` });
 
     if (body.aba === "disciplinas") {
       if (body.ordem_inicial == null || !body.captacao_inicio) {

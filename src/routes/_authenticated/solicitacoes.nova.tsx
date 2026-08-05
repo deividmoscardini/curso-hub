@@ -86,6 +86,7 @@ async function criarSolicitacao(payload: {
   ano?: number | null;
   curso_id?: string | null;
   payload: Record<string, unknown>;
+  previa?: unknown;
 }): Promise<string> {
   const { data: user } = await supabase.auth.getUser();
   const solicitante_id = user.user?.id;
@@ -97,10 +98,28 @@ async function criarSolicitacao(payload: {
     ano: payload.ano ?? null,
     curso_id: payload.curso_id ?? null,
     payload: payload.payload,
+    previa: payload.previa ?? null,
     status: "pendente",
   }).select("id").single();
   if (error) throw error;
   return data.id;
+}
+
+// Chama a edge function calcular-previa. Retorna { linhas, aviso? } ou null se erro.
+async function calcularPrevia(body: Record<string, unknown>): Promise<{ linhas: unknown[]; aviso?: string } | null> {
+  const { data: session } = await supabase.auth.getSession();
+  const token = session.session?.access_token;
+  const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calcular-previa`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json", apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+    body: JSON.stringify(body),
+  });
+  const json = await resp.json();
+  if (!resp.ok || json.error) {
+    toast.error("Prévia falhou", { description: json.error ?? "Erro" });
+    return null;
+  }
+  return { linhas: json.linhas, aviso: json.aviso };
 }
 
 function useSubmit(onDone: (id: string) => void) {
@@ -123,35 +142,145 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   const [nome, setNome] = useState("");
   const [escola, setEscola] = useState("");
   const [disciplinasTxt, setDisciplinasTxt] = useState("");
+  const [chDefault, setChDefault] = useState("20");
+  const [diaSemana, setDiaSemana] = useState<"quinta" | "quarta">("quinta");
+  const [anoEstreia, setAnoEstreia] = useState("");
+  const [dataInicioE1, setDataInicioE1] = useState("");
+  const [captacaoInicio, setCaptacaoInicio] = useState("");
+  const [paCh, setPaCh] = useState("60");
+  const [paCodigoPrefixo, setPaCodigoPrefixo] = useState("");
+  const [gerandoPrevia, setGerandoPrevia] = useState(false);
   const mut = useSubmit(onDone);
 
+  const chNum = parseInt(chDefault, 10) || 20;
   const disciplinas = disciplinasTxt
     .split("\n").map((s) => s.trim()).filter(Boolean)
-    .map((nome, i) => ({ ordem: i + 1, nome, ch: 20, tipo_oferta: "A" as const }));
+    .map((nomeD, i) => ({ ordem: i + 1, nome: nomeD, ch: chNum, tipo_oferta: "A" as const }));
 
+  const gerarOfertas = !!(anoEstreia && dataInicioE1 && captacaoInicio);
   const podeEnviar = codigo.trim() && sigla.trim() && nome.trim() && disciplinas.length > 0;
+
+  async function submeter() {
+    if (!podeEnviar) return;
+
+    let previa: unknown = null;
+    if (gerarOfertas) {
+      setGerandoPrevia(true);
+      const cursoMaster = {
+        sigla: sigla.trim().toUpperCase(),
+        curso: nome.trim(),
+        diaSemanaDefault: diaSemana,
+        paCh: parseInt(paCh, 10) || 60,
+        paAnosElegiveis: [],
+        paCodigoPrefixo: paCodigoPrefixo.trim() || "",
+        carrossel: disciplinas.map((d) => ({
+          ordem: d.ordem,
+          disciplina: d.nome,
+          codigoDisciplina: null,
+          tipoOferta: d.tipo_oferta,
+          ch: d.ch,
+          liveEstudoCasoOffset: diaSemana === "quinta" ? 10 : 9,
+          liveFechamentoOffset: diaSemana === "quinta" ? 17 : 16,
+        })),
+      };
+      const r = await calcularPrevia({
+        aba: "disciplinas",
+        ano: parseInt(anoEstreia, 10),
+        ancora: dataInicioE1,
+        cod_curso: codigo.trim(),
+        ordem_inicial: 1,
+        captacao_inicio: captacaoInicio,
+        curso_master: cursoMaster,
+      });
+      setGerandoPrevia(false);
+      if (!r) return; // erro já mostrou toast
+      previa = { linhas: r.linhas, aviso: r.aviso };
+    }
+
+    mut.mutate({
+      tenant_id: tenantId, tipo: "novo_curso",
+      aba: gerarOfertas ? "disciplinas" : null,
+      ano: gerarOfertas ? parseInt(anoEstreia, 10) : null,
+      payload: {
+        codigo: codigo.trim(), sigla: sigla.trim().toUpperCase(),
+        escola: escola.trim() || null, nome: nome.trim(),
+        disciplinas,
+        ...(gerarOfertas && {
+          gerar_ofertas_ano_estreia: true,
+          dia_semana_default: diaSemana,
+          pa_ch: parseInt(paCh, 10) || 60,
+          pa_codigo_prefixo: paCodigoPrefixo.trim() || null,
+        }),
+      },
+      previa,
+    });
+  }
 
   return (
     <Card>
-      <CardHeader><CardTitle>Novo curso</CardTitle>
-        <CardDescription>O curso será criado após aprovação. Depois, abra uma solicitação de "Alteração de datas — âncora" pra popular as ofertas do primeiro ano.</CardDescription>
+      <CardHeader><CardTitle>Abertura de novo curso</CardTitle>
+        <CardDescription>
+          O curso será criado ao aprovar. Se você preencher a seção "Gerar ofertas do 1º ano", o motor calcula e grava as 16 entradas já no calendário.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Campo label="Código do curso *"><Input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="411-XXX" /></Campo>
-        <Campo label="Sigla *"><Input value={sigla} onChange={(e) => setSigla(e.target.value)} placeholder="SIG" /></Campo>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Campo label="Código do curso *"><Input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="411-XXX" /></Campo>
+          <Campo label="Sigla *"><Input value={sigla} onChange={(e) => setSigla(e.target.value)} placeholder="SIG" /></Campo>
+        </div>
         <Campo label="Nome *"><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo do curso" /></Campo>
-        <Campo label="Escola"><Input value={escola} onChange={(e) => setEscola(e.target.value)} placeholder="Ex.: IA" /></Campo>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Campo label="Escola"><Input value={escola} onChange={(e) => setEscola(e.target.value)} placeholder="Ex.: IA" /></Campo>
+          <Campo label="CH padrão por disciplina">
+            <Select value={chDefault} onValueChange={setChDefault}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="20">20h</SelectItem>
+                <SelectItem value="24">24h</SelectItem>
+              </SelectContent>
+            </Select>
+          </Campo>
+        </div>
         <Campo label="Disciplinas do carrossel * (uma por linha, na ordem)">
-          <Textarea value={disciplinasTxt} onChange={(e) => setDisciplinasTxt(e.target.value)}
-            rows={12} placeholder={`1. Admirável Futuro Novo\n2. ...`} />
+          <Textarea value={disciplinasTxt} onChange={(e) => setDisciplinasTxt(e.target.value)} rows={10} placeholder={`Admirável Futuro Novo\nDisciplina 2\n...`} />
         </Campo>
-        <div className="text-xs text-muted-foreground">{disciplinas.length} disciplina(s) detectada(s).</div>
+        <div className="text-xs text-muted-foreground">{disciplinas.length} disciplina(s) — CH {chNum}h cada.</div>
+
+        <div className="mt-4 rounded-md border p-3">
+          <div className="mb-2 font-medium text-sm">Gerar ofertas do 1º ano (opcional)</div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Preencha pra o motor calcular e cadastrar as 16 entradas do ano de estreia junto com o curso. Deixe em branco pra criar só o cadastro do curso.
+          </p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Campo label="Ano de estreia">
+              <Input type="number" value={anoEstreia} onChange={(e) => setAnoEstreia(e.target.value)} placeholder="2027" />
+            </Campo>
+            <Campo label="Dia da semana das lives">
+              <Select value={diaSemana} onValueChange={(v) => setDiaSemana(v as "quinta" | "quarta")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="quinta">Quinta-feira</SelectItem>
+                  <SelectItem value="quarta">Quarta-feira</SelectItem>
+                </SelectContent>
+              </Select>
+            </Campo>
+            <Campo label="Prefixo do código PA">
+              <Input value={paCodigoPrefixo} onChange={(e) => setPaCodigoPrefixo(e.target.value)} placeholder="41130020XXX" />
+            </Campo>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Campo label="Data início da E1 (âncora)">
+              <Input type="date" value={dataInicioE1} onChange={(e) => setDataInicioE1(e.target.value)} />
+            </Campo>
+            <Campo label="Início da captação E1">
+              <Input type="date" value={captacaoInicio} onChange={(e) => setCaptacaoInicio(e.target.value)} />
+            </Campo>
+          </div>
+        </div>
+
         <div className="flex justify-end">
-          <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
-            tenant_id: tenantId, tipo: "novo_curso",
-            payload: { codigo: codigo.trim(), sigla: sigla.trim().toUpperCase(), escola: escola.trim() || null, nome: nome.trim(), disciplinas },
-          })}>
-            {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : "Enviar solicitação"}
+          <Button disabled={!podeEnviar || mut.isPending || gerandoPrevia} onClick={submeter}>
+            {(gerandoPrevia || mut.isPending) ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{gerandoPrevia ? "Calculando prévia…" : "Enviando…"}</> : "Enviar solicitação"}
           </Button>
         </div>
       </CardContent>
