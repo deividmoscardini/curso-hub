@@ -79,13 +79,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Solicitação de Abertura de Cursos" },
+      { title: "Calendário +A" },
       {
         name: "description",
         content:
           "Plataforma interna para solicitação e aprovação de abertura de novos cursos acadêmicos.",
       },
-      { property: "og:title", content: "Solicitação de Abertura de Cursos" },
+      { property: "og:title", content: "Calendário +A" },
       {
         property: "og:description",
         content:
@@ -93,6 +93,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Calendário +A" },
+      { name: "twitter:description", content: "Plataforma interna para solicitação e aprovação de abertura de novos cursos acadêmicos." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/2bb511c0-927f-4ccf-bf12-b4836ed3be04/id-preview-f18597ff--e62e5829-7fb3-4993-8285-e61214a21426.lovable.app-1785940025719.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/2bb511c0-927f-4ccf-bf12-b4836ed3be04/id-preview-f18597ff--e62e5829-7fb3-4993-8285-e61214a21426.lovable.app-1785940025719.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
