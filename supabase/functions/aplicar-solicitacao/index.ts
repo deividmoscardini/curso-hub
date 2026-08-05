@@ -170,7 +170,7 @@ Deno.serve(async (req: Request) => {
     // Ler solicitação com o token do usuário — se RLS bloquear ele nem vê
     const { data: solicitacao, error: erroLeitura } = await sbUser
       .from("solicitacoes")
-      .select("id, tenant_id, solicitante_id, tipo, aba, ano, curso_id, previa, status")
+      .select("id, tenant_id, solicitante_id, tipo, aba, ano, curso_id, payload, previa, status")
       .eq("id", body.solicitacao_id)
       .single();
     if (erroLeitura || !solicitacao) {
@@ -213,31 +213,90 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, status: novoStatus });
     }
 
-    // Aprovar: aplicar a prévia em calendario_linhas + status aplicada
-    if (!solicitacao.previa || !solicitacao.aba || !solicitacao.ano) {
-      return json(400, {
-        error: "Solicitação sem prévia/aba/ano — não é possível aplicar. Recalcule a prévia antes.",
-      });
-    }
-
-    let cursoCodigo: string | null = null;
-    if (solicitacao.curso_id) {
-      const { data: c } = await sbAdmin.from("cursos").select("codigo").eq("id", solicitacao.curso_id).single();
-      cursoCodigo = c?.codigo ?? null;
-    }
-
-    const rows = materializarLinhas(solicitacao as Solicitacao, cursoCodigo);
-    if (rows.length === 0) {
-      return json(400, { error: "Prévia vazia — nada a aplicar" });
-    }
-
-    // Upsert em calendario_linhas (por chave_natural)
-    const { error: erroUpsert } = await sbAdmin
-      .from("calendario_linhas")
-      .upsert(rows, { onConflict: "tenant_id,chave_natural" });
-    if (erroUpsert) return json(500, { error: `Falha ao gravar linhas: ${erroUpsert.message}` });
-
+    // Aprovar: branch por tipo. Handlers especializados pra novo_curso
+    // e reordenar_carrossel (que mexem em cursos/disciplinas, nao em
+    // calendario_linhas). Restante segue o fluxo antigo (previa -> linhas).
     const agora = new Date().toISOString();
+    let logDepois: Record<string, unknown> = {};
+    const solTyped = solicitacao as Solicitacao & { tipo: string; payload?: Record<string, unknown> };
+
+    if (solTyped.tipo === "novo_curso") {
+      const payload = (solTyped.payload ?? {}) as any;
+      const { data: cursoIns, error: eCurso } = await sbAdmin.from("cursos").insert({
+        tenant_id: solicitacao.tenant_id,
+        codigo: payload.codigo, sigla: payload.sigla, escola: payload.escola,
+        nome: payload.nome,
+        status: payload.status ?? "em_andamento",
+        flags_prontidao: payload.flags_prontidao ?? {},
+      }).select("id, codigo").single();
+      if (eCurso) return json(500, { error: `Falha ao criar curso: ${eCurso.message}` });
+
+      const discs = (payload.disciplinas ?? []) as Array<{ ordem: number; nome: string; ch?: number; tipo_oferta?: string }>;
+      if (discs.length > 0) {
+        const disciplinasRows = discs.map((d, i) => ({
+          tenant_id: solicitacao.tenant_id,
+          curso_id: cursoIns.id,
+          ordem_carrossel: d.ordem ?? i + 1,
+          nome: d.nome,
+          ch: d.ch ?? null,
+          tipo_oferta: (d.tipo_oferta ?? "A") as "A" | "C",
+        }));
+        const { error: eDisc } = await sbAdmin.from("disciplinas").insert(disciplinasRows);
+        if (eDisc) return json(500, { error: `Falha ao criar disciplinas: ${eDisc.message}` });
+      }
+      logDepois = { curso_id: cursoIns.id, codigo: cursoIns.codigo, disciplinas: discs.length };
+    } else if (solTyped.tipo === "reordenar_carrossel") {
+      const payload = (solTyped.payload ?? {}) as any;
+      if (!payload.curso_id || !Array.isArray(payload.ordem_final)) {
+        return json(400, { error: "payload deve conter curso_id e ordem_final[]" });
+      }
+      // Snapshot antes
+      const { data: antes } = await sbAdmin.from("disciplinas")
+        .select("id, ordem_carrossel, nome, ch, tipo_oferta")
+        .eq("curso_id", payload.curso_id).order("ordem_carrossel");
+
+      // Estratégia: DELETE + INSERT completo (garante ordem exata).
+      // Mais simples que diff granular; ok pra tamanho tipico (~15 disciplinas).
+      await sbAdmin.from("disciplinas").delete().eq("curso_id", payload.curso_id);
+
+      const novasLinhas = (payload.ordem_final as Array<{ nome: string; ch?: number; tipo_oferta?: string; ordem?: number }>).map((d, i) => ({
+        tenant_id: solicitacao.tenant_id,
+        curso_id: payload.curso_id,
+        ordem_carrossel: d.ordem ?? i + 1,
+        nome: d.nome,
+        ch: d.ch ?? null,
+        tipo_oferta: (d.tipo_oferta ?? "A") as "A" | "C",
+      }));
+      const { error: eIns } = await sbAdmin.from("disciplinas").insert(novasLinhas);
+      if (eIns) return json(500, { error: `Falha ao reordenar: ${eIns.message}` });
+
+      logDepois = { curso_id: payload.curso_id, disciplinas_finais: novasLinhas.length, antes };
+    } else {
+      // Tipos que dependem de previa em calendario_linhas
+      if (!solicitacao.previa || !solicitacao.aba || !solicitacao.ano) {
+        return json(400, {
+          error: "Solicitação sem prévia/aba/ano — não é possível aplicar. Recalcule a prévia antes.",
+        });
+      }
+
+      let cursoCodigo: string | null = null;
+      if (solicitacao.curso_id) {
+        const { data: c } = await sbAdmin.from("cursos").select("codigo").eq("id", solicitacao.curso_id).single();
+        cursoCodigo = c?.codigo ?? null;
+      }
+
+      const rows = materializarLinhas(solicitacao as Solicitacao, cursoCodigo);
+      if (rows.length === 0) {
+        return json(400, { error: "Prévia vazia — nada a aplicar" });
+      }
+
+      const { error: erroUpsert } = await sbAdmin
+        .from("calendario_linhas")
+        .upsert(rows, { onConflict: "tenant_id,chave_natural" });
+      if (erroUpsert) return json(500, { error: `Falha ao gravar linhas: ${erroUpsert.message}` });
+      logDepois = { linhas_gravadas: rows.length };
+    }
+
     const { error: erroSol } = await sbAdmin
       .from("solicitacoes")
       .update({
@@ -255,14 +314,10 @@ Deno.serve(async (req: Request) => {
       acao: "solicitacao.aplicar",
       entidade: "solicitacoes",
       entidade_id: solicitacao.id,
-      depois: { linhas_gravadas: rows.length },
+      depois: logDepois,
     });
 
-    return json(200, {
-      ok: true,
-      status: "aplicada",
-      linhas_gravadas: rows.length,
-    });
+    return json(200, { ok: true, status: "aplicada", ...logDepois });
   } catch (err) {
     return json(500, { error: String(err instanceof Error ? err.message : err) });
   }

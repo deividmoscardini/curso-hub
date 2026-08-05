@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, FileText, Package, ScrollText, LogOut, Users } from "lucide-react";
+import { CalendarDays, FileText, Package, ScrollText, LogOut, Users, Inbox } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { TenantContext, type Perfil, type PapelTenant, type Membro } from "@/contexts/tenant";
@@ -209,6 +209,14 @@ function AuthenticatedLayout() {
                               <Link to="/admin/usuarios">
                                 <Users />
                                 <span>Usuários</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isActive("/admin/solicitacoes")}>
+                              <Link to="/admin/solicitacoes">
+                                <Inbox />
+                                <span>Fila de solicitações</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
