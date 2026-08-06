@@ -321,6 +321,8 @@ function SolicitacaoDetalhePage() {
         </Card>
       )}
 
+      <AlteracaoDeDataDetalhe sol={sol} />
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader><CardTitle className="text-base">Dados do pedido</CardTitle></CardHeader>
@@ -529,5 +531,153 @@ function MotivoModal({ titulo, desc, submitLabel, onClose, onSubmit, pending }: 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Fase 8 — Rendering estruturado dos 4 subtipos de alteração de data.
+// Mostra: turma alvo, campo alterado (data atual → nova), motivo em
+// destaque. Só aparece pros subtipos alterar_data_*; outros tipos caem
+// no bloco genérico "Dados do pedido" (JSON cru).
+function AlteracaoDeDataDetalhe({ sol }: { sol: SolicitacaoDetalhe }) {
+  const SUBTIPOS = new Set([
+    "alterar_data_live",
+    "alterar_data_termino",
+    "alterar_data_correcao",
+    "alterar_data_inicio",
+  ]);
+  if (!SUBTIPOS.has(sol.tipo)) return null;
+
+  const payload = (sol.payload ?? {}) as {
+    chave_natural?: string;
+    campo?: string;
+    nova_data?: string;
+    motivo?: string;
+    propagar_seguintes?: boolean;
+  };
+
+  return <AlteracaoDeDataDetalheCard sol={sol} payload={payload} />;
+}
+
+function AlteracaoDeDataDetalheCard({
+  sol,
+  payload,
+}: {
+  sol: SolicitacaoDetalhe;
+  payload: {
+    chave_natural?: string;
+    campo?: string;
+    nova_data?: string;
+    motivo?: string;
+    propagar_seguintes?: boolean;
+  };
+}) {
+  const { data: linha } = useQuery({
+    queryKey: ["calendario-linha-alvo", sol.tenant_id, payload.chave_natural],
+    queryFn: async () => {
+      if (!payload.chave_natural) return null;
+      const { data } = await supabase
+        .from("calendario_linhas")
+        .select("dados")
+        .eq("tenant_id", sol.tenant_id)
+        .eq("chave_natural", payload.chave_natural)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!payload.chave_natural,
+  });
+
+  const dados = (linha?.dados ?? {}) as Record<string, unknown>;
+  const codigo = String(dados["CÓDIGO DA TURMA "] ?? dados["CÓDIGO DA TURMA"] ?? "—");
+  const disciplina = String(dados["DISCIPLINA"] ?? "");
+  const curso = String(dados["CURSO"] ?? "");
+  const inicio = (dados["DATA  INÍCIO"] ?? dados["DATA INÍCIO"] ?? null) as string | null;
+  const fim = (dados["DATA FIM "] ?? dados["DATA FIM"] ?? null) as string | null;
+  const valorAtual = payload.campo ? (dados[payload.campo] as string | null) : null;
+
+  const foraDeJanela =
+    sol.tipo === "alterar_data_live" && !!(inicio && fim && payload.nova_data) &&
+    (payload.nova_data < inicio || payload.nova_data > fim);
+
+  const titulos: Record<string, string> = {
+    alterar_data_live: "Alteração de data de live",
+    alterar_data_termino: "Alteração de término da disciplina",
+    alterar_data_correcao: "Alteração de data de correção",
+    alterar_data_inicio: "Alteração de início da disciplina",
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{titulos[sol.tipo]}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-md border bg-muted/30 p-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-mono">{codigo}</span>
+            <span className="text-muted-foreground">Ano {sol.ano ?? "—"}</span>
+          </div>
+          <div className="mt-1 text-sm font-medium">{disciplina}</div>
+          <div className="text-xs text-muted-foreground">{curso}</div>
+          {inicio && fim && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              Período da disciplina: {inicio} a {fim}.
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Campo</div>
+            <div className="mt-0.5 text-sm">{payload.campo ?? "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Alteração</div>
+            <div className="mt-0.5 text-sm">
+              <span className="text-muted-foreground line-through">{valorAtual ?? "(sem data)"}</span>
+              <span className="mx-2">→</span>
+              <span className="font-medium">{payload.nova_data ?? "—"}</span>
+            </div>
+          </div>
+        </div>
+
+        {foraDeJanela && (
+          <div className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <span className="font-medium">Fora do período da disciplina.</span> A aprovação vai falhar
+              — precisa devolver ou abrir também alteração de término.
+            </div>
+          </div>
+        )}
+        {!foraDeJanela && sol.tipo === "alterar_data_live" && payload.nova_data && (
+          <div className="flex items-start gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300">
+            <Check className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>Nova data cai dentro do período da disciplina.</div>
+          </div>
+        )}
+        {sol.tipo === "alterar_data_termino" && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+            Ao aplicar, a data de entrega da atividade avaliativa (QUESTIONÁRIO SEMANA 4) é atualizada
+            junto — regra da área.
+          </div>
+        )}
+        {sol.tipo === "alterar_data_inicio" && payload.propagar_seguintes && (
+          <div className="flex items-start gap-2 rounded-md border border-orange-500/40 bg-orange-500/10 p-3 text-xs text-orange-800 dark:text-orange-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <span className="font-medium">Propagar seguintes = SIM.</span> Todas as disciplinas do
+              mesmo curso/ano posteriores a esta serão reprojetadas.
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Motivo</div>
+          <div className="mt-1 rounded-md border bg-background p-3 text-sm">
+            {payload.motivo?.trim() ? payload.motivo : <span className="text-muted-foreground">(sem motivo — pedido inválido, devolva)</span>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

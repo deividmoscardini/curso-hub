@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { CalendarDays, AlertTriangle } from "lucide-react";
+import { CalendarDays, AlertTriangle, History } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/_authenticated/calendario/")({
   head: () => ({
@@ -18,6 +19,17 @@ export const Route = createFileRoute("/_authenticated/calendario/")({
 
 type Aba = "disciplinas" | "projeto_aplicacao" | "prova_substitutiva" | "fechamento";
 
+interface EventoComentario {
+  criado_em: string;
+  autor_id: string;
+  motivo: string;
+  solicitacao_id?: string;
+  tipo?: "alteracao_solicitacao" | "admin_edit" | "admin_delete";
+  campo_alterado?: string;
+  valor_anterior?: unknown;
+  valor_novo?: unknown;
+}
+
 interface Linha {
   id: string;
   aba: Aba;
@@ -26,6 +38,7 @@ interface Linha {
   chave_natural: string;
   dados: Record<string, unknown>;
   conflitos: Record<string, string>;
+  comentarios: EventoComentario[];
   curso_id: string | null;
 }
 
@@ -48,7 +61,7 @@ function CalendarioPage() {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("calendario_linhas")
-        .select("id, aba, ano, ordem, chave_natural, dados, conflitos, curso_id")
+        .select("id, aba, ano, ordem, chave_natural, dados, conflitos, comentarios, curso_id")
         .eq("tenant_id", tenantId)
         .eq("aba", aba)
         .order("ano", { ascending: true })
@@ -197,29 +210,36 @@ function CalendarioPage() {
                 {colunas.map((c) => (
                   <th key={c} className="p-2">{c}</th>
                 ))}
+                <th className="p-2">Histórico</th>
                 <th className="p-2">Conflitos</th>
               </tr>
             </thead>
             <tbody>
-              {filtradas.slice(0, 200).map((l) => (
-                <tr key={l.id} className="border-t hover:bg-muted/20">
-                  <td className="p-2 font-medium">{l.ano}</td>
-                  <td className="p-2">{l.ordem}</td>
-                  {colunas.map((c) => (
-                    <td key={c} className="p-2 max-w-[200px] truncate">
-                      {formatarCelula(l.dados[c])}
+              {filtradas.slice(0, 200).map((l) => {
+                const eventos = Array.isArray(l.comentarios) ? l.comentarios : [];
+                return (
+                  <tr key={l.id} className="border-t hover:bg-muted/20">
+                    <td className="p-2 font-medium">{l.ano}</td>
+                    <td className="p-2">{l.ordem}</td>
+                    {colunas.map((c) => (
+                      <td key={c} className="p-2 max-w-[200px] truncate">
+                        {formatarCelula(l.dados[c])}
+                      </td>
+                    ))}
+                    <td className="p-2">
+                      {eventos.length > 0 && <HistoricoBadge eventos={eventos} />}
                     </td>
-                  ))}
-                  <td className="p-2">
-                    {Object.keys(l.conflitos ?? {}).length > 0 && (
-                      <Badge variant="destructive" className="gap-1">
-                        <AlertTriangle className="h-3 w-3" />
-                        {Object.keys(l.conflitos).length}
-                      </Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    <td className="p-2">
+                      {Object.keys(l.conflitos ?? {}).length > 0 && (
+                        <Badge variant="destructive" className="gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          {Object.keys(l.conflitos).length}
+                        </Badge>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {filtradas.length > 200 && (
@@ -238,4 +258,47 @@ function formatarCelula(v: unknown): string {
   if (v == null) return "—";
   if (typeof v === "string" || typeof v === "number") return String(v);
   return JSON.stringify(v);
+}
+
+// Fase 8 — Badge + popover mostrando histórico de alterações da linha.
+function HistoricoBadge({ eventos }: { eventos: EventoComentario[] }) {
+  const ultimos = [...eventos].sort((a, b) => b.criado_em.localeCompare(a.criado_em));
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-800 hover:bg-sky-500/20 dark:text-sky-300"
+          aria-label={`${eventos.length} alterações registradas`}
+        >
+          <History className="h-3 w-3" />
+          {eventos.length}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96 p-0">
+        <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium">
+          Histórico ({eventos.length} {eventos.length === 1 ? "alteração" : "alterações"})
+        </div>
+        <ul className="max-h-80 divide-y overflow-y-auto">
+          {ultimos.map((ev, i) => (
+            <li key={i} className="p-3 text-xs">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span className="font-mono">{new Date(ev.criado_em).toLocaleString("pt-BR")}</span>
+                {ev.tipo && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{ev.tipo}</span>}
+              </div>
+              {ev.campo_alterado && (
+                <div className="mt-1">
+                  <span className="text-muted-foreground">{ev.campo_alterado}: </span>
+                  <span className="line-through text-muted-foreground">{formatarCelula(ev.valor_anterior)}</span>
+                  <span className="mx-1">→</span>
+                  <span className="font-medium">{formatarCelula(ev.valor_novo)}</span>
+                </div>
+              )}
+              <div className="mt-1">{ev.motivo}</div>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
 }

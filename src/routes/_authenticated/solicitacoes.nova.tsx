@@ -11,15 +11,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, ArrowLeft, AlertTriangle, Plus, Trash2, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TIPOS_CURSO_ORDENADOS, validarChMinima, type TipoCurso } from "@/lib/regras-tipo-curso";
 import { normalizar } from "@/lib/similaridade";
+import { SeletorCodigoTurma, CAMPO, livesDaLinha, type LinhaSelecionada } from "@/components/SeletorCodigoTurma";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/nova")({
   head: () => ({ meta: [{ title: "Nova solicitação" }] }),
   component: NovaSolicitacaoPage,
 });
 
-type TipoSolicitacao = "novo_curso" | "ajuste_ancora" | "ajuste_manual" | "reordenar_carrossel" | "cancelar_oferta";
+type TipoSolicitacao =
+  | "novo_curso"
+  | "reordenar_carrossel"
+  | "alterar_data_live"
+  | "alterar_data_termino"
+  | "alterar_data_correcao"
+  | "alterar_data_inicio";
 type Aba = "disciplinas" | "projeto_aplicacao" | "prova_substitutiva" | "fechamento";
 
 interface CursoRef { id: string; codigo: string; nome: string; }
@@ -50,21 +58,23 @@ function NovaSolicitacaoPage() {
 
       {!tipo && <SelectorTipo onEscolher={setTipo} />}
       {tipo === "novo_curso" && <FormNovoCurso tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
-      {tipo === "ajuste_ancora" && <FormAjusteAncora tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
-      {tipo === "ajuste_manual" && <FormAjusteManual tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
       {tipo === "reordenar_carrossel" && <FormReordenar tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
-      {tipo === "cancelar_oferta" && <FormCancelarOferta tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
+      {tipo === "alterar_data_live" && <FormAlterarDataLive tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
+      {tipo === "alterar_data_termino" && <FormAlterarDataTermino tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
+      {tipo === "alterar_data_correcao" && <FormAlterarDataCorrecao tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
+      {tipo === "alterar_data_inicio" && <FormAlterarDataInicio tenantId={tenantId} onDone={(id) => navigate({ to: "/solicitacoes/$id", params: { id } })} />}
     </div>
   );
 }
 
 function SelectorTipo({ onEscolher }: { onEscolher: (t: TipoSolicitacao) => void }) {
   const opcoes: { tipo: TipoSolicitacao; titulo: string; desc: string }[] = [
-    { tipo: "novo_curso", titulo: "Abertura de novo curso", desc: "Cadastra um curso novo com suas disciplinas. Ofertas do ano são geradas em passo seguinte (Alteração de datas)." },
-    { tipo: "ajuste_ancora", titulo: "Alteração de datas — âncora do ano", desc: "Recalcula toda uma aba/ano a partir de uma nova data-âncora. Também usado para popular ofertas de um novo ano." },
-    { tipo: "ajuste_manual", titulo: "Alteração de datas — célula específica", desc: "Muda uma data pontual em uma oferta existente." },
+    { tipo: "novo_curso", titulo: "Abertura de novo curso", desc: "Cadastra um curso novo com suas disciplinas. As ofertas do primeiro ano são geradas junto." },
+    { tipo: "alterar_data_live", titulo: "Alterar data de live", desc: "Troca a data de uma live específica em uma turma existente. Nova data precisa cair dentro do período da disciplina." },
+    { tipo: "alterar_data_termino", titulo: "Alterar data de término da disciplina", desc: "Prorroga o término da disciplina. A data de entrega da atividade avaliativa é atualizada junto." },
+    { tipo: "alterar_data_correcao", titulo: "Alterar data de correção do professor", desc: "Muda a data limite pra correção da atividade avaliativa." },
+    { tipo: "alterar_data_inicio", titulo: "Alterar data de início da disciplina", desc: "Uso raro e sensível — troca o início da disciplina. Sempre passa por aprovação." },
     { tipo: "reordenar_carrossel", titulo: "Reordenar / editar disciplinas", desc: "Muda a ordem, substitui, adiciona ou remove disciplinas do carrossel de um curso." },
-    { tipo: "cancelar_oferta", titulo: "Cancelar oferta", desc: "Remove uma oferta específica do calendário." },
   ];
   return (
     <div className="grid gap-3">
@@ -512,38 +522,73 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   );
 }
 
-// ---------------- Ajuste Âncora ----------------
-function FormAjusteAncora({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
-  const [aba, setAba] = useState<Aba>("disciplinas");
-  const [ano, setAno] = useState("");
-  const [ancora, setAncora] = useState("");
+// ---------------- Fase 8 — Alteração de data (4 subtipos) ----------------
+// Todos compartilham SeletorCodigoTurma pra escolher a linha, mostram data
+// atual pré-preenchida e exigem motivo textual (regra da Bruna: motivo
+// obrigatório em toda alteração de data).
+
+function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
+  const [linha, setLinha] = useState<LinhaSelecionada | null>(null);
+  const [campo, setCampo] = useState<string>("");
+  const [novaData, setNovaData] = useState("");
+  const [motivo, setMotivo] = useState("");
   const mut = useSubmit(onDone);
 
-  const podeEnviar = ano && /^\d{4}$/.test(ano) && /^\d{4}-\d{2}-\d{2}$/.test(ancora);
+  const lives = linha ? livesDaLinha(linha.dados) : [];
+  const inicio = linha ? CAMPO.inicio(linha.dados) : null;
+  const fim = linha ? CAMPO.fim(linha.dados) : null;
+  const foraDeJanela = !!(inicio && fim && novaData && (novaData < inicio || novaData > fim));
+  const podeEnviar = linha && campo && novaData && motivo.trim() && !foraDeJanela;
 
   return (
     <Card>
-      <CardHeader><CardTitle>Alteração de datas — nova âncora do ano</CardTitle>
-        <CardDescription>Recalcula toda a aba/ano a partir da nova data-âncora. Também usado pra criar as ofertas de um novo ano.</CardDescription>
+      <CardHeader>
+        <CardTitle>Alterar data de live</CardTitle>
+        <CardDescription>Busque a turma, escolha qual live e a nova data. A nova data precisa cair dentro do período da disciplina.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Campo label="Aba *">
-          <Select value={aba} onValueChange={(v) => setAba(v as Aba)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="disciplinas">Disciplinas</SelectItem>
-              <SelectItem value="projeto_aplicacao">Projeto de Aplicação</SelectItem>
-              <SelectItem value="prova_substitutiva">Prova Substitutiva</SelectItem>
-              <SelectItem value="fechamento">Fechamento de turmas</SelectItem>
-            </SelectContent>
-          </Select>
+        <Campo label="Turma *">
+          <SeletorCodigoTurma tenantId={tenantId} selecionada={linha} onSelecionar={(l) => { setLinha(l); setCampo(""); }} />
         </Campo>
-        <Campo label="Ano *"><Input type="number" value={ano} onChange={(e) => setAno(e.target.value)} placeholder="2029" /></Campo>
-        <Campo label="Nova âncora * (AAAA-MM-DD)"><Input type="date" value={ancora} onChange={(e) => setAncora(e.target.value)} /></Campo>
+        {linha && lives.length === 0 && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+            Esta turma não tem campos de LIVE cadastrados. Verifique se é o subtipo certo.
+          </div>
+        )}
+        {linha && lives.length > 0 && (
+          <Campo label="Qual live? *">
+            <Select value={campo} onValueChange={setCampo}>
+              <SelectTrigger><SelectValue placeholder="Escolha a live" /></SelectTrigger>
+              <SelectContent>
+                {lives.map((l) => (
+                  <SelectItem key={l.campo} value={l.campo}>
+                    {l.label} {l.valor ? `— hoje: ${l.valor}` : "(sem data)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Campo>
+        )}
+        <Campo label="Nova data *">
+          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+        </Campo>
+        {inicio && fim && (
+          <div className="text-xs text-muted-foreground">Período da disciplina: {inicio} a {fim}.</div>
+        )}
+        {foraDeJanela && (
+          <div className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>Data fora do período da disciplina. Se precisa mesmo dessa data, abra também uma alteração de <span className="font-medium">término da disciplina</span>.</div>
+          </div>
+        )}
+        <Campo label="Motivo *">
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder="Ex.: professor viajou; reagendar pra semana seguinte." />
+        </Campo>
         <div className="flex justify-end">
           <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
-            tenant_id: tenantId, tipo: "ajuste_ancora", aba, ano: parseInt(ano, 10),
-            payload: { aba, ano: parseInt(ano, 10), ancora },
+            tenant_id: tenantId, tipo: "alterar_data_live",
+            aba: "disciplinas", ano: linha!.ano,
+            payload: { chave_natural: linha!.chave_natural, campo, nova_data: novaData, motivo: motivo.trim() },
           })}>
             {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : "Enviar solicitação"}
           </Button>
@@ -553,32 +598,145 @@ function FormAjusteAncora({ tenantId, onDone }: { tenantId: string; onDone: (id:
   );
 }
 
-// ---------------- Ajuste Manual ----------------
-function FormAjusteManual({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
-  const [chaveNatural, setChaveNatural] = useState("");
-  const [campo, setCampo] = useState("");
-  const [novoValor, setNovoValor] = useState("");
-  const [observacao, setObservacao] = useState("");
+function FormAlterarDataTermino({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
+  const [linha, setLinha] = useState<LinhaSelecionada | null>(null);
+  const [novaData, setNovaData] = useState("");
+  const [motivo, setMotivo] = useState("");
   const mut = useSubmit(onDone);
 
-  const podeEnviar = chaveNatural.trim() && campo.trim() && novoValor.trim();
+  const terminoAtual = linha ? CAMPO.fim(linha.dados) : null;
+  const podeEnviar = linha && novaData && motivo.trim();
 
   return (
     <Card>
-      <CardHeader><CardTitle>Alteração de datas — célula específica</CardTitle>
-        <CardDescription>Muda um valor pontual em uma oferta já cadastrada.</CardDescription>
+      <CardHeader>
+        <CardTitle>Alterar data de término da disciplina</CardTitle>
+        <CardDescription>Prorroga (ou antecipa) o término da disciplina. A data de entrega da atividade avaliativa é atualizada junto.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Campo label="Chave natural da linha *">
-          <Input value={chaveNatural} onChange={(e) => setChaveNatural(e.target.value)} placeholder="Ex.: disciplinas-2027-411-393-E5-3" />
+        <Campo label="Turma *">
+          <SeletorCodigoTurma tenantId={tenantId} selecionada={linha} onSelecionar={setLinha} />
         </Campo>
-        <Campo label="Campo/coluna *"><Input value={campo} onChange={(e) => setCampo(e.target.value)} placeholder="Ex.: DATA INÍCIO" /></Campo>
-        <Campo label="Novo valor *"><Input value={novoValor} onChange={(e) => setNovoValor(e.target.value)} /></Campo>
-        <Campo label="Observação"><Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} /></Campo>
+        {linha && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>Alterar o término da disciplina <span className="font-medium">também prorroga a entrega da atividade avaliativa</span> (mesma linha, campo QUESTIONÁRIO SEMANA 4).</div>
+            </div>
+          </div>
+        )}
+        <Campo label="Nova data de término *">
+          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+        </Campo>
+        {terminoAtual && <div className="text-xs text-muted-foreground">Término atual: {terminoAtual}.</div>}
+        <Campo label="Motivo *">
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
+        </Campo>
         <div className="flex justify-end">
           <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
-            tenant_id: tenantId, tipo: "ajuste_manual",
-            payload: { chave_natural: chaveNatural.trim(), campo: campo.trim(), novo_valor: novoValor.trim(), observacao },
+            tenant_id: tenantId, tipo: "alterar_data_termino",
+            aba: "disciplinas", ano: linha!.ano,
+            payload: { chave_natural: linha!.chave_natural, campo: CAMPO.termino, nova_data: novaData, motivo: motivo.trim() },
+          })}>
+            {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : "Enviar solicitação"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FormAlterarDataCorrecao({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
+  const [linha, setLinha] = useState<LinhaSelecionada | null>(null);
+  const [novaData, setNovaData] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const mut = useSubmit(onDone);
+
+  const correcaoAtual = linha ? String((linha.dados as Record<string, unknown>)[CAMPO.correcao] ?? "") : "";
+  const podeEnviar = linha && novaData && motivo.trim();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Alterar data de correção do professor</CardTitle>
+        <CardDescription>Muda a data limite pra correção da atividade avaliativa da turma.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Campo label="Turma *">
+          <SeletorCodigoTurma tenantId={tenantId} selecionada={linha} onSelecionar={setLinha} />
+        </Campo>
+        <Campo label="Nova data de correção *">
+          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+        </Campo>
+        {correcaoAtual && <div className="text-xs text-muted-foreground">Data atual: {correcaoAtual}.</div>}
+        <Campo label="Motivo *">
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
+        </Campo>
+        <div className="flex justify-end">
+          <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
+            tenant_id: tenantId, tipo: "alterar_data_correcao",
+            aba: "disciplinas", ano: linha!.ano,
+            payload: { chave_natural: linha!.chave_natural, campo: CAMPO.correcao, nova_data: novaData, motivo: motivo.trim() },
+          })}>
+            {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : "Enviar solicitação"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FormAlterarDataInicio({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
+  const [linha, setLinha] = useState<LinhaSelecionada | null>(null);
+  const [novaData, setNovaData] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [propagar, setPropagar] = useState(false);
+  const mut = useSubmit(onDone);
+
+  const inicioAtual = linha ? CAMPO.inicio(linha.dados) : null;
+  const podeEnviar = linha && novaData && motivo.trim();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Alterar data de início da disciplina</CardTitle>
+        <CardDescription>Cenário raro e sensível — sempre passa por aprovação manual.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>Este é o subtipo com <span className="font-medium">maior impacto no calendário</span>. Confirme com o time antes de solicitar.</div>
+          </div>
+        </div>
+        <Campo label="Turma *">
+          <SeletorCodigoTurma tenantId={tenantId} selecionada={linha} onSelecionar={setLinha} />
+        </Campo>
+        <Campo label="Novo início *">
+          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+        </Campo>
+        {inicioAtual && <div className="text-xs text-muted-foreground">Início atual: {inicioAtual}.</div>}
+        <div className="flex items-start gap-2 rounded-md border p-3">
+          <Checkbox id="propagar" checked={propagar} onCheckedChange={(v) => setPropagar(!!v)} />
+          <label htmlFor="propagar" className="text-sm">
+            <span className="font-medium">Propagar mudança pras disciplinas seguintes do mesmo curso/ano</span>
+            <div className="text-xs text-muted-foreground">Default = não. Marque só se o time confirmou. Motor reprojeta as próximas.</div>
+          </label>
+        </div>
+        <Campo label="Motivo *">
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
+        </Campo>
+        <div className="flex justify-end">
+          <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
+            tenant_id: tenantId, tipo: "alterar_data_inicio",
+            aba: "disciplinas", ano: linha!.ano,
+            payload: {
+              chave_natural: linha!.chave_natural,
+              campo: "DATA  INÍCIO",
+              nova_data: novaData,
+              motivo: motivo.trim(),
+              propagar_seguintes: propagar,
+            },
           })}>
             {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : "Enviar solicitação"}
           </Button>
@@ -660,34 +818,9 @@ function FormReordenar({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   );
 }
 
-// ---------------- Cancelar Oferta ----------------
-function FormCancelarOferta({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
-  const [chaveNatural, setChaveNatural] = useState("");
-  const [motivo, setMotivo] = useState("");
-  const mut = useSubmit(onDone);
-
-  const podeEnviar = chaveNatural.trim() && motivo.trim();
-
-  return (
-    <Card>
-      <CardHeader><CardTitle>Cancelar oferta</CardTitle>
-        <CardDescription>Remove uma oferta específica do calendário após aprovação.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <Campo label="Chave natural *"><Input value={chaveNatural} onChange={(e) => setChaveNatural(e.target.value)} placeholder="Ex.: disciplinas-2027-411-393-E5-3" /></Campo>
-        <Campo label="Motivo *"><Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} /></Campo>
-        <div className="flex justify-end">
-          <Button variant="destructive" disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
-            tenant_id: tenantId, tipo: "cancelar_oferta",
-            payload: { chave_natural: chaveNatural.trim(), motivo: motivo.trim() },
-          })}>
-            {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : "Enviar solicitação"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+// Cancelar oferta saiu do radio de solicitações (Fase 8, decisão da
+// reunião de 6/ago/2026) — cenário excepcional que o admin resolve
+// direto em /admin/calendario.
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return (

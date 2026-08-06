@@ -121,6 +121,67 @@ function materializarLinhas(
   });
 }
 
+/**
+ * Fase 8 — aplica mudança pontual em UMA linha de calendario_linhas.
+ * Usada pelos 4 handlers de alteração de data. Faz:
+ *   1) busca a linha por (tenant_id, chave_natural)
+ *   2) update em dados[campo]
+ *   3) append de evento em comentarios[]
+ * Retorna {ok, erro?, valor_anterior, valor_novo}.
+ */
+async function aplicarMudancaEmLinha(
+  sb: SupabaseClient,
+  args: {
+    tenant_id: string;
+    chave_natural: string;
+    campo: string;
+    novo_valor: unknown;
+    motivo: string;
+    solicitacao_id: string;
+    autor_id: string;
+    validar?: (linha: { dados: Record<string, unknown> }) => string | null;
+  },
+): Promise<{ ok: boolean; erro?: string; status?: number; valor_anterior?: unknown }> {
+  const { data: linha, error: eBusca } = await sb
+    .from("calendario_linhas")
+    .select("id, dados, comentarios")
+    .eq("tenant_id", args.tenant_id)
+    .eq("chave_natural", args.chave_natural)
+    .single();
+  if (eBusca || !linha) {
+    return { ok: false, erro: `Linha ${args.chave_natural} não encontrada`, status: 404 };
+  }
+
+  const dados = (linha.dados ?? {}) as Record<string, unknown>;
+  if (args.validar) {
+    const erroValidacao = args.validar({ dados });
+    if (erroValidacao) return { ok: false, erro: erroValidacao, status: 400 };
+  }
+
+  const valor_anterior = dados[args.campo];
+  const novosDados = { ...dados, [args.campo]: args.novo_valor };
+  const evento = {
+    criado_em: new Date().toISOString(),
+    autor_id: args.autor_id,
+    motivo: args.motivo,
+    solicitacao_id: args.solicitacao_id,
+    tipo: "alteracao_solicitacao" as const,
+    campo_alterado: args.campo,
+    valor_anterior,
+    valor_novo: args.novo_valor,
+  };
+  const comentariosAtuais = Array.isArray(linha.comentarios) ? linha.comentarios : [];
+  const comentarios = [...comentariosAtuais, evento];
+
+  const { error: eUpd } = await sb
+    .from("calendario_linhas")
+    .update({ dados: novosDados, comentarios })
+    .eq("id", linha.id);
+  if (eUpd) return { ok: false, erro: eUpd.message, status: 500 };
+
+  return { ok: true, valor_anterior };
+}
+
 async function verificarAprovador(sb: SupabaseClient, tenantId: string): Promise<{ ok: boolean; erro?: string; user?: { id: string } }> {
   const { data: userData, error: erroUser } = await sb.auth.getUser();
   if (erroUser || !userData?.user) {
@@ -310,6 +371,92 @@ Deno.serve(async (req: Request) => {
       if (eIns) return json(500, { error: `Falha ao reordenar: ${eIns.message}` });
 
       logDepois = { curso_id: payload.curso_id, disciplinas_finais: novasLinhas.length, antes };
+    } else if (
+      solTyped.tipo === "alterar_data_live" ||
+      solTyped.tipo === "alterar_data_termino" ||
+      solTyped.tipo === "alterar_data_correcao" ||
+      solTyped.tipo === "alterar_data_inicio"
+    ) {
+      // Fase 8 — Solicitações de alteração de data pontual.
+      // Payload comum: { chave_natural, campo, nova_data, motivo }
+      // Subtipo A/live também traz `campo` = chave da live específica.
+      // Subtipo B/termino também atualiza campo secundário (atividade).
+      // Subtipo D/inicio pode ter propagar_seguintes=true (futuro).
+      const payload = (solTyped.payload ?? {}) as {
+        chave_natural?: string;
+        campo?: string;
+        nova_data?: string;
+        motivo?: string;
+        propagar_seguintes?: boolean;
+      };
+      if (!payload.chave_natural || !payload.campo || !payload.nova_data || !payload.motivo?.trim()) {
+        return json(400, {
+          error: "Payload deve conter chave_natural, campo, nova_data e motivo.",
+        });
+      }
+
+      // Subtipo A: valida que nova_data cai dentro do período da disciplina.
+      // Chaves reais em `dados` vêm da planilha: "DATA  INÍCIO" (2 espaços) e "DATA FIM ".
+      const validar =
+        solTyped.tipo === "alterar_data_live"
+          ? (linha: { dados: Record<string, unknown> }): string | null => {
+              const inicio = (linha.dados["DATA  INÍCIO"] ?? linha.dados["DATA INÍCIO"] ?? null) as string | null;
+              const fim = (linha.dados["DATA FIM "] ?? linha.dados["DATA FIM"] ?? null) as string | null;
+              if (!inicio || !fim) return null; // sem período conhecido, não bloqueia
+              if (payload.nova_data! < inicio || payload.nova_data! > fim) {
+                return `Data ${payload.nova_data} fora do período da disciplina (${inicio} a ${fim}). Se precisa mesmo dessa data, abra também uma alteração de término da disciplina.`;
+              }
+              return null;
+            }
+          : undefined;
+
+      const resultado = await aplicarMudancaEmLinha(sbAdmin, {
+        tenant_id: solicitacao.tenant_id,
+        chave_natural: payload.chave_natural,
+        campo: payload.campo,
+        novo_valor: payload.nova_data,
+        motivo: payload.motivo,
+        solicitacao_id: solicitacao.id,
+        autor_id: userId,
+        validar,
+      });
+      if (!resultado.ok) return json(resultado.status ?? 500, { error: resultado.erro });
+
+      logDepois = {
+        chave_natural: payload.chave_natural,
+        campo_alterado: payload.campo,
+        valor_anterior: resultado.valor_anterior,
+        valor_novo: payload.nova_data,
+      };
+
+      // Subtipo B/termino: também atualiza campo de atividade (mesma linha).
+      // Regra da Bruna: término da disciplina = término da entrega da atividade.
+      if (solTyped.tipo === "alterar_data_termino") {
+        const resAtividade = await aplicarMudancaEmLinha(sbAdmin, {
+          tenant_id: solicitacao.tenant_id,
+          chave_natural: payload.chave_natural,
+          campo: "QUESTIONÁRIO (SEMANA 4)",
+          novo_valor: payload.nova_data,
+          motivo: `${payload.motivo} (propagação automática: término da atividade)`,
+          solicitacao_id: solicitacao.id,
+          autor_id: userId,
+        });
+        if (!resAtividade.ok) {
+          // Não é fatal — só loga; o campo principal (término) já foi atualizado.
+          logDepois = { ...logDepois, aviso_propagacao: resAtividade.erro };
+        } else {
+          logDepois = { ...logDepois, atividade_propagada: true };
+        }
+      }
+
+      // Subtipo D com propagar_seguintes=true — TODO na próxima iteração:
+      // chamar `calcular-previa` pra reprojetar as disciplinas seguintes do
+      // mesmo curso/ano e materializar as linhas. Por ora só a linha
+      // solicitada é alterada; propagação em massa entra depois quando o
+      // motor der suporte a "âncora móvel por disciplina".
+      if (solTyped.tipo === "alterar_data_inicio" && payload.propagar_seguintes) {
+        logDepois = { ...logDepois, propagacao_pendente: true };
+      }
     } else {
       // Tipos que dependem de previa em calendario_linhas
       if (!solicitacao.previa || !solicitacao.aba || !solicitacao.ano) {
