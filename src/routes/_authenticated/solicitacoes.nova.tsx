@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { TIPOS_CURSO_ORDENADOS, CH_MINIMA_DEFAULT, validarChMinima, type TipoCurso } from "@/lib/regras-tipo-curso";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/nova")({
   head: () => ({ meta: [{ title: "Nova solicitação" }] }),
@@ -136,9 +138,27 @@ function useSubmit(onDone: (id: string) => void) {
 }
 
 // ---------------- Novo Curso ----------------
+// Fase 7.3 — Refactor: tipo_curso obrigatorio (S1), sigla auto-sugerida (S3),
+// validacao de CH minima antes de enviar (A1), remove prefixo PA que era
+// campo tecnico (S9).
+const STOPWORDS_SIGLA = new Set(["de", "da", "do", "das", "dos", "e", "a", "o", "as", "os", "em", "na", "no", "para", "pra", "com", "sem", "por"]);
+
+function gerarSigla(nome: string): string {
+  const palavras = nome
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((p) => p.length > 0 && !STOPWORDS_SIGLA.has(p));
+  const iniciais = palavras.map((p) => p[0]).join("").toUpperCase();
+  return iniciais.slice(0, 3);
+}
+
 function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
+  const [tipoCurso, setTipoCurso] = useState<TipoCurso>("pos_graduacao");
   const [codigo, setCodigo] = useState("");
+  const [aguardandoCodigo, setAguardandoCodigo] = useState(false);
   const [sigla, setSigla] = useState("");
+  const [siglaEditadaManualmente, setSiglaEditadaManualmente] = useState(false);
   const [nome, setNome] = useState("");
   const [escola, setEscola] = useState("");
   const [disciplinasTxt, setDisciplinasTxt] = useState("");
@@ -148,17 +168,29 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   const [dataInicioE1, setDataInicioE1] = useState("");
   const [captacaoInicio, setCaptacaoInicio] = useState("");
   const [paCh, setPaCh] = useState("60");
-  const [paCodigoPrefixo, setPaCodigoPrefixo] = useState("");
   const [gerandoPrevia, setGerandoPrevia] = useState(false);
   const mut = useSubmit(onDone);
+
+  // Auto-sugestao de sigla (S3): pega 3 letras iniciais das palavras
+  // principais do nome. Para de sugerir se o user editou manualmente.
+  const siglaSugerida = gerarSigla(nome);
+  if (!siglaEditadaManualmente && siglaSugerida !== sigla) {
+    // pequena espiga: usa efeito no state via chamada indireta
+    setTimeout(() => { if (!siglaEditadaManualmente) setSigla(siglaSugerida); }, 0);
+  }
 
   const chNum = parseInt(chDefault, 10) || 20;
   const disciplinas = disciplinasTxt
     .split("\n").map((s) => s.trim()).filter(Boolean)
     .map((nomeD, i) => ({ ordem: i + 1, nome: nomeD, ch: chNum, tipo_oferta: "A" as const }));
 
+  // A1 — Validacao de CH minima por tipo (executa localmente antes do submit)
+  const chTotal = disciplinas.reduce((s, d) => s + (d.ch ?? 0), 0);
+  const validacaoCh = validarChMinima(tipoCurso, chTotal);
+
   const gerarOfertas = !!(anoEstreia && dataInicioE1 && captacaoInicio);
-  const podeEnviar = codigo.trim() && sigla.trim() && nome.trim() && disciplinas.length > 0;
+  const codigoOk = codigo.trim() || aguardandoCodigo;
+  const podeEnviar = codigoOk && sigla.trim() && nome.trim() && disciplinas.length > 0 && validacaoCh.ok;
 
   async function submeter() {
     if (!podeEnviar) return;
@@ -202,14 +234,16 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
       aba: gerarOfertas ? "disciplinas" : null,
       ano: gerarOfertas ? parseInt(anoEstreia, 10) : null,
       payload: {
-        codigo: codigo.trim(), sigla: sigla.trim().toUpperCase(),
+        tipo_curso: tipoCurso,
+        codigo: codigo.trim() || null,
+        aguardando_codigo: aguardandoCodigo,
+        sigla: sigla.trim().toUpperCase(),
         escola: escola.trim() || null, nome: nome.trim(),
         disciplinas,
         ...(gerarOfertas && {
           gerar_ofertas_ano_estreia: true,
           dia_semana_default: diaSemana,
           pa_ch: parseInt(paCh, 10) || 60,
-          pa_codigo_prefixo: paCodigoPrefixo.trim() || null,
         }),
       },
       previa,
@@ -224,11 +258,35 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* S1 — Tipo de curso primeiro */}
+        <Campo label="Tipo de curso *">
+          <RadioGroup value={tipoCurso} onValueChange={(v) => setTipoCurso(v as TipoCurso)} className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            {TIPOS_CURSO_ORDENADOS.map((t) => (
+              <label key={t.valor} className={`flex cursor-pointer flex-col gap-1 rounded-md border p-2 text-sm hover:bg-accent ${tipoCurso === t.valor ? "border-primary bg-primary/5" : ""}`}>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value={t.valor} />
+                  <span className="font-medium">{t.label}</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">{t.desc}</span>
+              </label>
+            ))}
+          </RadioGroup>
+        </Campo>
+
+        <Campo label="Nome do curso *"><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo do curso" /></Campo>
+
         <div className="grid gap-3 md:grid-cols-2">
-          <Campo label="Código do curso *"><Input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="411-XXX" /></Campo>
-          <Campo label="Sigla *"><Input value={sigla} onChange={(e) => setSigla(e.target.value)} placeholder="SIG" /></Campo>
+          <Campo label={aguardandoCodigo ? "Código (aguardando criação)" : "Código do curso *"}>
+            <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="411-XXX" disabled={aguardandoCodigo} />
+            <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={aguardandoCodigo} onChange={(e) => setAguardandoCodigo(e.target.checked)} />
+              Aguardando criação de código
+            </label>
+          </Campo>
+          <Campo label={`Sigla * (${siglaEditadaManualmente ? "editada" : "sugerida"})`}>
+            <Input value={sigla} onChange={(e) => { setSigla(e.target.value.toUpperCase()); setSiglaEditadaManualmente(true); }} placeholder="SIG" maxLength={3} />
+          </Campo>
         </div>
-        <Campo label="Nome *"><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo do curso" /></Campo>
         <div className="grid gap-3 md:grid-cols-2">
           <Campo label="Escola"><Input value={escola} onChange={(e) => setEscola(e.target.value)} placeholder="Ex.: IA" /></Campo>
           <Campo label="CH padrão por disciplina">
@@ -244,15 +302,26 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         <Campo label="Disciplinas do carrossel * (uma por linha, na ordem)">
           <Textarea value={disciplinasTxt} onChange={(e) => setDisciplinasTxt(e.target.value)} rows={10} placeholder={`Admirável Futuro Novo\nDisciplina 2\n...`} />
         </Campo>
-        <div className="text-xs text-muted-foreground">{disciplinas.length} disciplina(s) — CH {chNum}h cada.</div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">{disciplinas.length} disciplina(s) — CH {chNum}h cada.</span>
+          <span className={`font-medium ${validacaoCh.ok ? "text-emerald-600" : "text-rose-600"}`}>
+            Total: {chTotal}h {validacaoCh.ch_minima > 0 && `/ mínimo ${validacaoCh.ch_minima}h`}
+          </span>
+        </div>
+        {!validacaoCh.ok && (
+          <div className="flex gap-2 rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{validacaoCh.mensagem}</span>
+          </div>
+        )}
 
         <div className="mt-4 rounded-md border p-3">
           <div className="mb-2 font-medium text-sm">Gerar ofertas do 1º ano (opcional)</div>
           <p className="mb-3 text-xs text-muted-foreground">
             Preencha pra o motor calcular e cadastrar as 16 entradas do ano de estreia junto com o curso. Deixe em branco pra criar só o cadastro do curso.
           </p>
-          <div className="grid gap-3 md:grid-cols-3">
-            <Campo label="Ano de estreia">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Campo label="Ano de lançamento">
               <Input type="number" value={anoEstreia} onChange={(e) => setAnoEstreia(e.target.value)} placeholder="2027" />
             </Campo>
             <Campo label="Dia da semana das lives">
@@ -263,9 +332,6 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
                   <SelectItem value="quarta">Quarta-feira</SelectItem>
                 </SelectContent>
               </Select>
-            </Campo>
-            <Campo label="Prefixo do código PA">
-              <Input value={paCodigoPrefixo} onChange={(e) => setPaCodigoPrefixo(e.target.value)} placeholder="41130020XXX" />
             </Campo>
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
