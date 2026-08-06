@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Loader2, ArrowLeft, AlertTriangle, Plus, Trash2, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { TIPOS_CURSO_ORDENADOS, CH_MINIMA_DEFAULT, validarChMinima, type TipoCurso } from "@/lib/regras-tipo-curso";
+import { TIPOS_CURSO_ORDENADOS, validarChMinima, type TipoCurso } from "@/lib/regras-tipo-curso";
+import { normalizar } from "@/lib/similaridade";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/nova")({
   head: () => ({ meta: [{ title: "Nova solicitação" }] }),
@@ -153,6 +154,19 @@ function gerarSigla(nome: string): string {
   return iniciais.slice(0, 3);
 }
 
+// Fase 7.6 — Estrutura de uma disciplina no form (S4+S5)
+interface DisciplinaLinha {
+  ordem: number;
+  nome: string;
+  ch: number;
+  tipo_oferta: "A" | "C";
+  tem_pre_requisito: boolean;
+}
+
+function novaLinhaDisciplina(ordem: number, chDefault: number): DisciplinaLinha {
+  return { ordem, nome: "", ch: chDefault, tipo_oferta: "A", tem_pre_requisito: false };
+}
+
 function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
   const [tipoCurso, setTipoCurso] = useState<TipoCurso>("pos_graduacao");
   const [codigo, setCodigo] = useState("");
@@ -161,7 +175,6 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   const [siglaEditadaManualmente, setSiglaEditadaManualmente] = useState(false);
   const [nome, setNome] = useState("");
   const [escola, setEscola] = useState("");
-  const [disciplinasTxt, setDisciplinasTxt] = useState("");
   const [chDefault, setChDefault] = useState("20");
   const [diaSemana, setDiaSemana] = useState<"quinta" | "quarta">("quinta");
   const [anoEstreia, setAnoEstreia] = useState("");
@@ -169,28 +182,58 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   const [captacaoInicio, setCaptacaoInicio] = useState("");
   const [paCh, setPaCh] = useState("60");
   const [gerandoPrevia, setGerandoPrevia] = useState(false);
+  // S4+S5 — linhas dinamicas de disciplinas com pre-requisito
+  const [disciplinas, setDisciplinas] = useState<DisciplinaLinha[]>(() => [novaLinhaDisciplina(1, 20)]);
   const mut = useSubmit(onDone);
 
-  // Auto-sugestao de sigla (S3): pega 3 letras iniciais das palavras
-  // principais do nome. Para de sugerir se o user editou manualmente.
+  // A2 — busca cursos existentes no tenant pra bloquear duplicata de nome
+  const { data: cursosExistentes } = useQuery({
+    queryKey: ["cursos-tenant", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from("cursos").select("id, codigo, nome").eq("tenant_id", tenantId);
+      return (data ?? []) as Array<{ id: string; codigo: string; nome: string }>;
+    },
+  });
+
+  const nomeNormalizado = normalizar(nome);
+  const cursoDuplicado = nomeNormalizado && (cursosExistentes ?? []).find((c) => normalizar(c.nome) === nomeNormalizado);
+
+  // Auto-sugestao de sigla (S3)
   const siglaSugerida = gerarSigla(nome);
   if (!siglaEditadaManualmente && siglaSugerida !== sigla) {
-    // pequena espiga: usa efeito no state via chamada indireta
     setTimeout(() => { if (!siglaEditadaManualmente) setSigla(siglaSugerida); }, 0);
   }
 
-  const chNum = parseInt(chDefault, 10) || 20;
-  const disciplinas = disciplinasTxt
-    .split("\n").map((s) => s.trim()).filter(Boolean)
-    .map((nomeD, i) => ({ ordem: i + 1, nome: nomeD, ch: chNum, tipo_oferta: "A" as const }));
+  // Handlers das linhas de disciplina
+  const chNumDefault = parseInt(chDefault, 10) || 20;
+  function adicionarLinha() {
+    setDisciplinas((ds) => [...ds, novaLinhaDisciplina(ds.length + 1, chNumDefault)]);
+  }
+  function removerLinha(idx: number) {
+    setDisciplinas((ds) => ds.filter((_, i) => i !== idx).map((d, i) => ({ ...d, ordem: i + 1 })));
+  }
+  function atualizarLinha(idx: number, patch: Partial<DisciplinaLinha>) {
+    setDisciplinas((ds) => ds.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
+  }
+  function setQuantidade(n: number) {
+    setDisciplinas((ds) => {
+      if (n <= 0) return [];
+      if (n === ds.length) return ds;
+      if (n > ds.length) {
+        const extras = Array.from({ length: n - ds.length }, (_, k) => novaLinhaDisciplina(ds.length + k + 1, chNumDefault));
+        return [...ds, ...extras];
+      }
+      return ds.slice(0, n).map((d, i) => ({ ...d, ordem: i + 1 }));
+    });
+  }
 
-  // A1 — Validacao de CH minima por tipo (executa localmente antes do submit)
-  const chTotal = disciplinas.reduce((s, d) => s + (d.ch ?? 0), 0);
+  const disciplinasValidas = disciplinas.filter((d) => d.nome.trim().length > 0);
+  const chTotal = disciplinasValidas.reduce((s, d) => s + (d.ch ?? 0), 0);
   const validacaoCh = validarChMinima(tipoCurso, chTotal);
 
   const gerarOfertas = !!(anoEstreia && dataInicioE1 && captacaoInicio);
   const codigoOk = codigo.trim() || aguardandoCodigo;
-  const podeEnviar = codigoOk && sigla.trim() && nome.trim() && disciplinas.length > 0 && validacaoCh.ok;
+  const podeEnviar = codigoOk && sigla.trim() && nome.trim() && !cursoDuplicado && disciplinasValidas.length > 0 && validacaoCh.ok;
 
   async function submeter() {
     if (!podeEnviar) return;
@@ -204,8 +247,8 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         diaSemanaDefault: diaSemana,
         paCh: parseInt(paCh, 10) || 60,
         paAnosElegiveis: [],
-        paCodigoPrefixo: paCodigoPrefixo.trim() || "",
-        carrossel: disciplinas.map((d) => ({
+        paCodigoPrefixo: "",
+        carrossel: disciplinasValidas.map((d) => ({
           ordem: d.ordem,
           disciplina: d.nome,
           codigoDisciplina: null,
@@ -219,7 +262,7 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         aba: "disciplinas",
         ano: parseInt(anoEstreia, 10),
         ancora: dataInicioE1,
-        cod_curso: codigo.trim(),
+        cod_curso: codigo.trim() || "PENDENTE",
         ordem_inicial: 1,
         captacao_inicio: captacaoInicio,
         curso_master: cursoMaster,
@@ -239,7 +282,7 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         aguardando_codigo: aguardandoCodigo,
         sigla: sigla.trim().toUpperCase(),
         escola: escola.trim() || null, nome: nome.trim(),
-        disciplinas,
+        disciplinas: disciplinasValidas,
         ...(gerarOfertas && {
           gerar_ofertas_ano_estreia: true,
           dia_semana_default: diaSemana,
@@ -248,6 +291,46 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
       },
       previa,
     });
+  }
+
+  // S8 — Template Excel: download + upload
+  function baixarTemplate() {
+    // CSV simples (aceita como planilha no Excel/Google Sheets)
+    const rows = [
+      "Ordem,Nome da disciplina,CH,Tipo (A/C),Tem pre-requisito",
+      "1,Ex.: Admiravel Futuro Novo,20,C,nao",
+      "2,Ex.: Estrategias de Mercado,20,A,nao",
+      "3,,,,",
+    ];
+    const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "template-disciplinas.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const linhas = text.replace(/^﻿/, "").split(/\r?\n/).slice(1).filter((l) => l.trim());
+    const parsed: DisciplinaLinha[] = linhas.map((linha, i) => {
+      const [_ord, nomeCol, chCol, tipoCol, preCol] = linha.split(",");
+      return {
+        ordem: i + 1,
+        nome: (nomeCol ?? "").trim(),
+        ch: parseInt(chCol ?? "20", 10) || 20,
+        tipo_oferta: ((tipoCol ?? "A").trim().toUpperCase() === "C" ? "C" : "A") as "A" | "C",
+        tem_pre_requisito: /^(sim|s|true|1|yes)$/i.test((preCol ?? "").trim()),
+      };
+    }).filter((d) => d.nome.length > 0);
+    if (parsed.length === 0) {
+      toast.error("Arquivo vazio ou formato invalido", { description: "Baixe o template e siga o cabecalho." });
+      return;
+    }
+    setDisciplinas(parsed);
+    toast.success(`${parsed.length} disciplina(s) importadas`);
+    e.target.value = "";
   }
 
   return (
@@ -273,7 +356,15 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
           </RadioGroup>
         </Campo>
 
-        <Campo label="Nome do curso *"><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo do curso" /></Campo>
+        <Campo label="Nome do curso *">
+          <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo do curso" />
+          {cursoDuplicado && (
+            <div className="mt-1 flex gap-2 rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>Já existe curso com este nome ({cursoDuplicado.codigo}). Ajuste o nome ou considere continuar o curso existente.</span>
+            </div>
+          )}
+        </Campo>
 
         <div className="grid gap-3 md:grid-cols-2">
           <Campo label={aguardandoCodigo ? "Código (aguardando criação)" : "Código do curso *"}>
@@ -299,14 +390,81 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
             </Select>
           </Campo>
         </div>
-        <Campo label="Disciplinas do carrossel * (uma por linha, na ordem)">
-          <Textarea value={disciplinasTxt} onChange={(e) => setDisciplinasTxt(e.target.value)} rows={10} placeholder={`Admirável Futuro Novo\nDisciplina 2\n...`} />
-        </Campo>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">{disciplinas.length} disciplina(s) — CH {chNum}h cada.</span>
-          <span className={`font-medium ${validacaoCh.ok ? "text-emerald-600" : "text-rose-600"}`}>
-            Total: {chTotal}h {validacaoCh.ch_minima > 0 && `/ mínimo ${validacaoCh.ch_minima}h`}
-          </span>
+        {/* S4+S5 — disciplinas dinamicas com pre-requisito, S8 template Excel */}
+        <div className="rounded-md border">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium">Disciplinas do carrossel</label>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span>Quantas?</span>
+                <Input type="number" min={0} value={disciplinas.length} onChange={(e) => setQuantidade(parseInt(e.target.value, 10) || 0)} className="h-7 w-16" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={baixarTemplate}>
+                <Download className="mr-1 h-3 w-3" />Template
+              </Button>
+              <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent">
+                <Upload className="h-3 w-3" />Importar
+                <input type="file" accept=".csv,.txt" className="hidden" onChange={upload} />
+              </label>
+            </div>
+          </div>
+          <div className="max-h-96 overflow-y-auto p-2">
+            {disciplinas.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">Nenhuma disciplina. Clique em "+ Disciplina" ou importe da planilha.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground">
+                  <tr>
+                    <th className="w-10 p-1 text-left">#</th>
+                    <th className="p-1 text-left">Nome</th>
+                    <th className="w-20 p-1">CH</th>
+                    <th className="w-16 p-1">Tipo</th>
+                    <th className="w-24 p-1 text-center">Pré-req?</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {disciplinas.map((d, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="p-1 text-xs text-muted-foreground">{d.ordem}</td>
+                      <td className="p-1"><Input value={d.nome} onChange={(e) => atualizarLinha(i, { nome: e.target.value })} placeholder="Nome da disciplina" className="h-8" /></td>
+                      <td className="p-1"><Input type="number" min={0} max={200} value={d.ch} onChange={(e) => atualizarLinha(i, { ch: parseInt(e.target.value, 10) || 0 })} className="h-8" /></td>
+                      <td className="p-1">
+                        <Select value={d.tipo_oferta} onValueChange={(v) => atualizarLinha(i, { tipo_oferta: v as "A" | "C" })}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="A">A (exclusiva)</SelectItem>
+                            <SelectItem value="C">C (compartilhada)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-1 text-center">
+                        <input type="checkbox" checked={d.tem_pre_requisito} onChange={(e) => atualizarLinha(i, { tem_pre_requisito: e.target.checked })} />
+                      </td>
+                      <td className="p-1">
+                        <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => removerLinha(i)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2">
+            <Button type="button" size="sm" variant="outline" onClick={adicionarLinha}>
+              <Plus className="mr-1 h-3 w-3" />Disciplina
+            </Button>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-muted-foreground">{disciplinasValidas.length} disciplina(s) com nome</span>
+              <span className={`font-medium ${validacaoCh.ok ? "text-emerald-600" : "text-rose-600"}`}>
+                Total: {chTotal}h {validacaoCh.ch_minima > 0 && `/ mínimo ${validacaoCh.ch_minima}h`}
+              </span>
+            </div>
+          </div>
         </div>
         {!validacaoCh.ok && (
           <div className="flex gap-2 rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300">

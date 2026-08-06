@@ -56,6 +56,12 @@ function SolicitacaoDetalhePage() {
   const { perfil, papel } = useTenant();
   const [rejeitando, setRejeitando] = useState(false);
   const [devolvendo, setDevolvendo] = useState(false);
+  // Fase 7.7 — A8: cada disciplina/linha marcada localmente como "OK" antes
+  // de aprovar a solicitacao inteira. Sem mudanca de schema — client-side only.
+  const [linhasOk, setLinhasOk] = useState<Set<string>>(new Set());
+  const toggleLinha = (chave: string) => setLinhasOk((s) => {
+    const n = new Set(s); n.has(chave) ? n.delete(chave) : n.add(chave); return n;
+  });
 
   const { data: sol } = useQuery({
     queryKey: ["solicitacao", id],
@@ -105,6 +111,12 @@ function SolicitacaoDetalhePage() {
 
   // Fase 7 — Analises estruturais visiveis ao aprovador (so em novo_curso)
   const analise = useAnaliseEstrutural(sol);
+  // A8 — Para novo_curso, extrai chaves das disciplinas pra checar se
+  // todas foram marcadas como OK antes de habilitar o botao "Aprovar".
+  const chavesLinhas = (sol && sol.tipo === "novo_curso")
+    ? ((sol.payload as any)?.disciplinas ?? []).map((d: any, i: number) => `disc-${i}-${d.nome}`)
+    : [];
+  const todasLinhasOk = chavesLinhas.length === 0 || chavesLinhas.every((c: string) => linhasOk.has(c));
 
   if (!sol) return <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>;
 
@@ -136,9 +148,14 @@ function SolicitacaoDetalhePage() {
             <Button variant="outline" size="sm" onClick={() => setRejeitando(true)}>
               <X className="mr-1 h-4 w-4" />Rejeitar
             </Button>
-            <Button size="sm" onClick={() => aplicar.mutate({ decisao: "aprovar" })} disabled={aplicar.isPending}>
+            <Button
+              size="sm"
+              onClick={() => aplicar.mutate({ decisao: "aprovar" })}
+              disabled={aplicar.isPending || !todasLinhasOk}
+              title={!todasLinhasOk ? "Marque todas as linhas como OK antes de aprovar" : undefined}
+            >
               {aplicar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
-              Aprovar
+              Aprovar {chavesLinhas.length > 0 && `(${linhasOk.size}/${chavesLinhas.length})`}
             </Button>
           </div>
         )}
@@ -216,6 +233,94 @@ function SolicitacaoDetalhePage() {
         </Card>
       )}
 
+      {/* A6 — Compartilhamento (disciplina C que já existe em outros cursos) */}
+      {analise?.compartilhadas && analise.compartilhadas.length > 0 && (
+        <Card className="border-sky-500/40 bg-sky-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm text-sky-800 dark:text-sky-300">
+              <AlertTriangle className="h-4 w-4" />Disciplinas compartilhadas ({analise.compartilhadas.length})
+            </CardTitle>
+            <CardDescription>Estas disciplinas estão marcadas como compartilhadas (tipo C) e já existem em outros cursos. Confira no calendário se as datas de oferta batem antes de aprovar.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {analise.compartilhadas.map((c, i) => (
+              <div key={i} className="text-xs">
+                <span className="font-medium">"{c.nome}"</span> — já em: {c.cursos.slice(0, 5).join(", ")}{c.cursos.length > 5 && ` + ${c.cursos.length - 5} outros`}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* A7 — Ortografia */}
+      {analise?.ortografia && analise.ortografia.length > 0 && (
+        <Card className="border-slate-400/40 bg-slate-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-300">
+              <AlertTriangle className="h-4 w-4" />Revisão ortográfica ({analise.ortografia.length})
+            </CardTitle>
+            <CardDescription>Nomes com formatação incomum. Não bloqueia, é só um ping pro revisor.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {analise.ortografia.map((o, i) => (
+              <div key={i} className="text-xs">
+                <span className="font-medium">"{o.nome}"</span> — {o.problema}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* A8 — Aprovacao por linha (novo_curso): tabela com checkbox por disciplina */}
+      {sol.tipo === "novo_curso" && chavesLinhas.length > 0 && podeDecidir && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Disciplinas do curso ({chavesLinhas.length})</CardTitle>
+            <CardDescription>
+              Revise cada linha e marque como OK antes de aprovar. Se algo estiver errado, use "Devolver" com um comentário pro solicitante ajustar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="w-16 p-2 text-center">OK?</th>
+                    <th className="w-10 p-2">#</th>
+                    <th className="p-2">Disciplina</th>
+                    <th className="w-16 p-2">CH</th>
+                    <th className="w-20 p-2">Tipo</th>
+                    <th className="w-24 p-2 text-center">Pré-req</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {((sol.payload as any)?.disciplinas ?? []).map((d: any, i: number) => {
+                    const chave = `disc-${i}-${d.nome}`;
+                    const ok = linhasOk.has(chave);
+                    return (
+                      <tr key={chave} className={`border-t ${ok ? "bg-emerald-500/5" : ""}`}>
+                        <td className="p-2 text-center">
+                          <input type="checkbox" checked={ok} onChange={() => toggleLinha(chave)} />
+                        </td>
+                        <td className="p-2 text-xs text-muted-foreground">{d.ordem ?? i + 1}</td>
+                        <td className="p-2 font-medium">{d.nome}</td>
+                        <td className="p-2 text-xs">{d.ch ?? "—"}h</td>
+                        <td className="p-2 text-xs">{d.tipo_oferta === "C" ? "Compartilhada" : "Exclusiva"}</td>
+                        <td className="p-2 text-center text-xs">{d.tem_pre_requisito ? "Sim" : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="border-t bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              {linhasOk.size} de {chavesLinhas.length} marcadas como OK.
+              {linhasOk.size < chavesLinhas.length && " Aprovar só habilita quando todas estiverem marcadas."}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader><CardTitle className="text-base">Dados do pedido</CardTitle></CardHeader>
@@ -288,6 +393,26 @@ interface AnaliseEstrutural {
   totalizador: { ch_total: number; tipo_curso: TipoCurso | null; validacao: ReturnType<typeof validarChMinima> } | null;
   duplicatas: Array<{ novo_nome: string; similar_nome: string; score: number }>;
   divergencias: Array<{ nome: string; ch_novo: number; ch_existentes: string }>;
+  compartilhadas: Array<{ nome: string; cursos: string[] }>; // A6
+  ortografia: Array<{ nome: string; problema: string }>;     // A7
+}
+
+// A7 — heuristicas simples de ortografia PT-BR pra nomes de disciplinas.
+// Nao substitui um corretor completo; pega os erros mais comuns:
+// - Duplo espaco
+// - Comeca com minuscula
+// - "e"/"em"/"de" no comeco ou fim
+// - Sem qualquer letra minuscula (tudo caixa alta)
+// - Termina com pontuacao
+function analisarOrtografia(nome: string): string | null {
+  const t = nome.trim();
+  if (!t) return null;
+  if (/\s{2,}/.test(t)) return "Espaco duplo — remova espacos extras";
+  if (/[.,;:!?]$/.test(t)) return "Termina com pontuacao — remova";
+  if (/^(e|em|de|da|do|a|o|com)\s/i.test(t)) return `Comeca com "${t.split(" ")[0]}" — verifique se e intencional`;
+  if (t.length > 3 && t === t.toUpperCase()) return "Todo em maiuscula — considere caixa mista";
+  if (/^[a-z]/.test(t)) return "Comeca com minuscula — capitalize a primeira letra";
+  return null;
 }
 
 function useAnaliseEstrutural(sol: SolicitacaoDetalhe | null | undefined): AnaliseEstrutural | null {
@@ -296,7 +421,7 @@ function useAnaliseEstrutural(sol: SolicitacaoDetalhe | null | undefined): Anali
     queryFn: async () => {
       if (!sol?.tenant_id) return [];
       const { data } = await supabase.from("disciplinas")
-        .select("nome, ch, curso_id")
+        .select("nome, ch, tipo_oferta, curso_id, cursos(codigo, nome)")
         .eq("tenant_id", sol.tenant_id);
       return data ?? [];
     },
@@ -306,7 +431,7 @@ function useAnaliseEstrutural(sol: SolicitacaoDetalhe | null | undefined): Anali
   if (!sol || sol.tipo !== "novo_curso") return null;
 
   const payload = (sol.payload as any) ?? {};
-  const disciplinasNovas = (payload.disciplinas ?? []) as Array<{ nome: string; ch: number | null; ordem: number }>;
+  const disciplinasNovas = (payload.disciplinas ?? []) as Array<{ nome: string; ch: number | null; ordem: number; tipo_oferta?: "A" | "C" }>;
 
   const tipo_curso = (payload.tipo_curso as TipoCurso | null) ?? null;
   const ch_total = disciplinasNovas.reduce((s, d) => s + (d.ch ?? 0), 0);
@@ -315,14 +440,20 @@ function useAnaliseEstrutural(sol: SolicitacaoDetalhe | null | undefined): Anali
     validacao: validarChMinima(tipo_curso, ch_total),
   } : null;
 
-  // A4 — Duplicatas: cada disciplina nova comparada contra as existentes
+  // A4 — Duplicatas
   const candidatos = (disciplinasExistentes ?? []).map((d: any) => ({ item: d, nome: d.nome }));
   const duplicatas: AnaliseEstrutural["duplicatas"] = [];
   const chExistentesPorNome = new Map<string, Set<number>>();
+  const cursosPorNomeDisciplina = new Map<string, string[]>();
   for (const d of disciplinasExistentes ?? []) {
     const key = d.nome.toLowerCase().trim();
     if (!chExistentesPorNome.has(key)) chExistentesPorNome.set(key, new Set());
     if (d.ch != null) chExistentesPorNome.get(key)!.add(d.ch);
+    if (!cursosPorNomeDisciplina.has(key)) cursosPorNomeDisciplina.set(key, []);
+    const cursoNome = (d.cursos as any)?.codigo ?? (d.cursos as any)?.nome ?? d.curso_id;
+    if (cursoNome && !cursosPorNomeDisciplina.get(key)!.includes(cursoNome)) {
+      cursosPorNomeDisciplina.get(key)!.push(cursoNome);
+    }
   }
 
   for (const d of disciplinasNovas) {
@@ -352,7 +483,28 @@ function useAnaliseEstrutural(sol: SolicitacaoDetalhe | null | undefined): Anali
     }
   }
 
-  return { totalizador, duplicatas, divergencias };
+  // A6 — Compartilhamento descasado: disciplina 'C' (compartilhada) que
+  // ja existe em outros cursos. Nao verificamos datas em `calendario_linhas`
+  // ainda (complexo); mostramos o alerta pro aprovador conferir manualmente
+  // as datas ali no calendario antes de aprovar.
+  const compartilhadas: AnaliseEstrutural["compartilhadas"] = [];
+  for (const d of disciplinasNovas) {
+    if (d.tipo_oferta !== "C") continue;
+    const key = d.nome.toLowerCase().trim();
+    const cursosOndeExiste = cursosPorNomeDisciplina.get(key) ?? [];
+    if (cursosOndeExiste.length > 0) {
+      compartilhadas.push({ nome: d.nome, cursos: cursosOndeExiste });
+    }
+  }
+
+  // A7 — Ortografia
+  const ortografia: AnaliseEstrutural["ortografia"] = [];
+  for (const d of disciplinasNovas) {
+    const problema = analisarOrtografia(d.nome);
+    if (problema) ortografia.push({ nome: d.nome, problema });
+  }
+
+  return { totalizador, duplicatas, divergencias, compartilhadas, ortografia };
 }
 
 function MotivoModal({ titulo, desc, submitLabel, onClose, onSubmit, pending }: {
