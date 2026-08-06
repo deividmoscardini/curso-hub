@@ -181,6 +181,16 @@ Deno.serve(async (req: Request) => {
     if (!check.ok) return json(403, { error: check.erro });
     const userId = check.user!.id;
 
+    // Fase 6.B3 — Anti-auto-aprovacao: solicitante nao pode aprovar
+    // sua propria solicitacao (excecao: admin_global, que pode tudo).
+    // Rejeitar/devolver a propria sim; aprovar nao.
+    if (body.decisao === "aprovar" && solicitacao.solicitante_id === userId) {
+      const { data: perfil } = await sbAdmin.from("perfis").select("admin_global").eq("id", userId).single();
+      if (!perfil?.admin_global) {
+        return json(403, { error: "Você não pode aprovar sua própria solicitação — aguarde um admin." });
+      }
+    }
+
     // Rejeitar / devolver: só atualiza status
     if (body.decisao === "rejeitar" || body.decisao === "devolver") {
       const novoStatus = body.decisao === "rejeitar" ? "rejeitada" : "devolvida";

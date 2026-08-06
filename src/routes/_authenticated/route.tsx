@@ -209,6 +209,7 @@ function AuthenticatedLayout() {
                               <Link to="/admin/usuarios">
                                 <Users />
                                 <span>Usuários</span>
+                                <PendentesBadge />
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -271,6 +272,24 @@ function AuthenticatedLayout() {
       </SidebarProvider>
     </TenantContext.Provider>
   );
+}
+
+// Fase 6.M6 — Badge numerico ao lado do link "Usuarios" quando ha
+// pendentes de aprovacao. Substitui o banner "N aguardando aprovacao"
+// que ficava no topo da /admin/usuarios.
+function PendentesBadge() {
+  const { data } = useQuery({
+    queryKey: ["pendentes-count"],
+    queryFn: async () => {
+      const { count } = await supabase.from("perfis")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pendente");
+      return count ?? 0;
+    },
+    refetchInterval: 30000,
+  });
+  if (!data) return null;
+  return <Badge variant="destructive" className="ml-auto text-[10px]">{data}</Badge>;
 }
 
 // Tela mostrada quando o user esta pendente/rejeitado — bloqueia todas as
