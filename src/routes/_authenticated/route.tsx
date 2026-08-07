@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, FileText, Package, ScrollText, LogOut, Users, Inbox, Wrench } from "lucide-react";
+import { useT } from "@/contexts/i18n";
+import { SeletorIdioma } from "@/components/SeletorIdioma";
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { TenantContext, type Perfil, type PapelTenant, type Membro } from "@/contexts/tenant";
@@ -41,6 +43,7 @@ function AuthenticatedLayout() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { t } = useT();
 
   const { data: perfil, isLoading: perfilLoading } = useQuery({
     queryKey: ["perfil", user.id],
@@ -156,14 +159,14 @@ function AuthenticatedLayout() {
 
             <SidebarContent>
               <SidebarGroup>
-                <SidebarGroupLabel>Calendário</SidebarGroupLabel>
+                <SidebarGroupLabel>{t("layout.calendario")}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild isActive={isActive("/calendario")}>
                         <Link to="/calendario">
                           <CalendarDays />
-                          <span>Visão do calendário</span>
+                          <span>{t("layout.visao_calendario")}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -173,14 +176,14 @@ function AuthenticatedLayout() {
 
               {podeSolicitar && (
                 <SidebarGroup>
-                  <SidebarGroupLabel>Fluxo</SidebarGroupLabel>
+                  <SidebarGroupLabel>{t("layout.fluxo")}</SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
                       <SidebarMenuItem>
                         <SidebarMenuButton asChild isActive={isActive("/solicitacoes")}>
                           <Link to="/solicitacoes">
                             <FileText />
-                            <span>Solicitações</span>
+                            <span>{t("layout.solicitacoes")}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -191,14 +194,14 @@ function AuthenticatedLayout() {
 
               {(perfil?.admin_global || podeEditar) && (
                 <SidebarGroup>
-                  <SidebarGroupLabel>Administração</SidebarGroupLabel>
+                  <SidebarGroupLabel>{t("layout.administracao")}</SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
                       <SidebarMenuItem>
                         <SidebarMenuButton asChild isActive={isActive("/produtos")}>
                           <Link to="/produtos">
                             <Package />
-                            <span>Produtos</span>
+                            <span>{t("layout.produtos")}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -208,7 +211,7 @@ function AuthenticatedLayout() {
                             <SidebarMenuButton asChild isActive={isActive("/admin/usuarios")}>
                               <Link to="/admin/usuarios">
                                 <Users />
-                                <span>Usuários</span>
+                                <span>{t("layout.usuarios")}</span>
                                 <PendentesBadge />
                               </Link>
                             </SidebarMenuButton>
@@ -217,7 +220,7 @@ function AuthenticatedLayout() {
                             <SidebarMenuButton asChild isActive={isActive("/admin/solicitacoes")}>
                               <Link to="/admin/solicitacoes">
                                 <Inbox />
-                                <span>Fila de solicitações</span>
+                                <span>{t("layout.fila_solicitacoes")}</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -225,7 +228,7 @@ function AuthenticatedLayout() {
                             <SidebarMenuButton asChild isActive={isActive("/admin/calendario")}>
                               <Link to="/admin/calendario">
                                 <Wrench />
-                                <span>Calendário (admin)</span>
+                                <span>{t("layout.calendario_admin")}</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -233,7 +236,7 @@ function AuthenticatedLayout() {
                             <SidebarMenuButton asChild isActive={isActive("/auditoria")}>
                               <Link to="/auditoria">
                                 <ScrollText />
-                                <span>Auditoria</span>
+                                <span>{t("layout.auditoria")}</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -248,7 +251,7 @@ function AuthenticatedLayout() {
             <SidebarFooter>
               <Button variant="ghost" size="sm" onClick={handleSignOut} className="justify-start">
                 <LogOut className="mr-2 h-4 w-4" />
-                Sair
+                {t("comum.sair")}
               </Button>
             </SidebarFooter>
           </Sidebar>
@@ -261,7 +264,7 @@ function AuthenticatedLayout() {
                   {perfil ? (
                     <span className="flex items-center gap-2">
                       {perfil.nome || perfil.email}
-                      {perfil.admin_global && <Badge variant="secondary" className="text-[10px]">admin</Badge>}
+                      {perfil.admin_global && <Badge variant="secondary" className="text-[10px]">{t("layout.admin_badge")}</Badge>}
                       {papel && !perfil.admin_global && (
                         <Badge variant="outline" className="text-[10px] capitalize">
                           {papel.replace("_", " ")}
@@ -271,6 +274,7 @@ function AuthenticatedLayout() {
                   ) : null}
                 </div>
               </div>
+              <SeletorIdioma />
             </header>
             <main className="flex-1 overflow-auto bg-muted/20 p-6">
               <Outlet />

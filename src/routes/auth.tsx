@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { GraduationCap } from "lucide-react";
+import { useT } from "@/contexts/i18n";
+import { SeletorIdioma } from "@/components/SeletorIdioma";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -27,6 +29,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { t } = useT();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [nome, setNome] = useState("");
@@ -45,7 +48,7 @@ function AuthPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
     setLoading(false);
     if (error) {
-      toast.error("Não foi possível entrar", { description: error.message });
+      toast.error(t("auth.nao_foi_possivel_entrar"), { description: error.message });
       return;
     }
     navigate({ to: "/calendario" });
@@ -64,58 +67,49 @@ function AuthPage() {
     });
     setLoading(false);
     if (error) {
-      toast.error("Não foi possível cadastrar", { description: error.message });
+      toast.error(t("auth.nao_foi_possivel_cadastrar"), { description: error.message });
       return;
     }
-    toast.success("Conta criada. Verifique seu e-mail para confirmar.");
+    toast.success(t("auth.conta_criada"));
   };
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+      <div className="absolute right-4 top-4">
+        <SeletorIdioma variant="ghost" />
+      </div>
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <GraduationCap className="h-6 w-6" />
           </div>
-          <h1 className="mt-3 text-xl font-semibold">Solicitação de Abertura de Cursos</h1>
+          <h1 className="mt-3 text-xl font-semibold">{t("auth.titulo")}</h1>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Acessar plataforma</CardTitle>
-            <CardDescription>Entre com sua conta ou crie uma nova.</CardDescription>
+            <CardTitle>{t("auth.entrar")}</CardTitle>
+            <CardDescription>{t("auth.dominio_restrito")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="entrar">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="entrar">Entrar</TabsTrigger>
-                <TabsTrigger value="cadastrar">Cadastrar</TabsTrigger>
+                <TabsTrigger value="entrar">{t("auth.ja_tem_conta")}</TabsTrigger>
+                <TabsTrigger value="cadastrar">{t("auth.cadastrar")}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="entrar" className="space-y-4 pt-4">
                 <form onSubmit={handleLogin} className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="email">E-mail</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
+                    <Label htmlFor="email">{t("auth.email")}</Label>
+                    <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="senha">Senha</Label>
-                    <Input
-                      id="senha"
-                      type="password"
-                      required
-                      value={senha}
-                      onChange={(e) => setSenha(e.target.value)}
-                    />
+                    <Label htmlFor="senha">{t("auth.senha")}</Label>
+                    <Input id="senha" type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
-                    Entrar
+                    {loading ? t("auth.entrando") : t("auth.entrar")}
                   </Button>
                 </form>
               </TabsContent>
@@ -123,42 +117,23 @@ function AuthPage() {
               <TabsContent value="cadastrar" className="space-y-4 pt-4">
                 <form onSubmit={handleSignup} className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="nome-cad">Nome</Label>
-                    <Input
-                      id="nome-cad"
-                      required
-                      value={nome}
-                      onChange={(e) => setNome(e.target.value)}
-                    />
+                    <Label htmlFor="nome-cad">{t("auth.nome")}</Label>
+                    <Input id="nome-cad" required value={nome} onChange={(e) => setNome(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="email-cad">E-mail</Label>
-                    <Input
-                      id="email-cad"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
+                    <Label htmlFor="email-cad">{t("auth.email")}</Label>
+                    <Input id="email-cad" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="senha-cad">Senha</Label>
-                    <Input
-                      id="senha-cad"
-                      type="password"
-                      required
-                      minLength={6}
-                      value={senha}
-                      onChange={(e) => setSenha(e.target.value)}
-                    />
+                    <Label htmlFor="senha-cad">{t("auth.senha")}</Label>
+                    <Input id="senha-cad" type="password" required minLength={6} value={senha} onChange={(e) => setSenha(e.target.value)} />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
-                    Cadastrar
+                    {loading ? t("auth.cadastrando") : t("auth.cadastrar")}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
-
           </CardContent>
         </Card>
       </div>
