@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, AlertTriangle, Plus, Trash2, Download, Upload, FileSpreadsheet } from "lucide-react";
+import { Loader2, ArrowLeft, AlertTriangle, Plus, Trash2, Download, Upload, FileSpreadsheet, Sparkles } from "lucide-react";
+import * as XLSX from "xlsx";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TIPOS_CURSO_ORDENADOS, validarChMinima, type TipoCurso } from "@/lib/regras-tipo-curso";
@@ -177,6 +178,19 @@ function novaLinhaDisciplina(ordem: number, chDefault: number): DisciplinaLinha 
   return { ordem, nome: "", ch: chDefault, tipo_oferta: "A", tem_pre_requisito: false };
 }
 
+// Dias da semana (segunda a sábado). "seg" no jsonb pra ficar curto.
+// O motor legado usava "quinta"/"quarta" — mapeamos na hora de gerar a
+// prévia (só o motor conhece os offsets exatos por dia).
+type DiaSemana = "seg" | "ter" | "qua" | "qui" | "sex" | "sab";
+const DIAS_SEMANA: Array<{ valor: DiaSemana; label: string }> = [
+  { valor: "seg", label: "Segunda-feira" },
+  { valor: "ter", label: "Terça-feira" },
+  { valor: "qua", label: "Quarta-feira" },
+  { valor: "qui", label: "Quinta-feira" },
+  { valor: "sex", label: "Sexta-feira" },
+  { valor: "sab", label: "Sábado" },
+];
+
 function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
   const [tipoCurso, setTipoCurso] = useState<TipoCurso>("pos_graduacao");
   const [codigo, setCodigo] = useState("");
@@ -186,7 +200,9 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   const [nome, setNome] = useState("");
   const [escola, setEscola] = useState("");
   const [chDefault, setChDefault] = useState("20");
-  const [diaSemana, setDiaSemana] = useState<"quinta" | "quarta">("quinta");
+  const [diaSemana, setDiaSemana] = useState<DiaSemana>("qui");
+  const [semanaLive, setSemanaLive] = useState("3");
+  const [duracaoSemanas, setDuracaoSemanas] = useState("4");
   const [anoEstreia, setAnoEstreia] = useState("");
   const [dataInicioE1, setDataInicioE1] = useState("");
   const [captacaoInicio, setCaptacaoInicio] = useState("");
@@ -251,10 +267,23 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
     let previa: unknown = null;
     if (gerarOfertas) {
       setGerandoPrevia(true);
+      // Motor legado só entende "quinta" e "quarta"; pros outros dias
+      // usamos quinta como fallback + aviso no toast. Refatoração do
+      // motor pra suportar seg-sab entra em backlog.
+      const diaMotor: "quinta" | "quarta" =
+        diaSemana === "qua" ? "quarta" : "quinta";
+      if (diaSemana !== "qua" && diaSemana !== "qui") {
+        toast.info("Motor calcula com quinta-feira", {
+          description: `O dia real (${DIAS_SEMANA.find((d) => d.valor === diaSemana)?.label}) fica gravado no payload; o motor ainda só sabe quarta/quinta.`,
+        });
+      }
+      const semanaLiveNum = Math.max(1, parseInt(semanaLive, 10) || 3);
+      const semanaFechamentoNum = semanaLiveNum + 1;
+      const offsetPorSemana = (n: number) => (diaMotor === "quinta" ? 7 * (n - 1) + 3 : 7 * (n - 1) + 2);
       const cursoMaster = {
         sigla: sigla.trim().toUpperCase(),
         curso: nome.trim(),
-        diaSemanaDefault: diaSemana,
+        diaSemanaDefault: diaMotor,
         paCh: parseInt(paCh, 10) || 60,
         paAnosElegiveis: [],
         paCodigoPrefixo: "",
@@ -264,8 +293,8 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
           codigoDisciplina: null,
           tipoOferta: d.tipo_oferta,
           ch: d.ch,
-          liveEstudoCasoOffset: diaSemana === "quinta" ? 10 : 9,
-          liveFechamentoOffset: diaSemana === "quinta" ? 17 : 16,
+          liveEstudoCasoOffset: offsetPorSemana(semanaLiveNum),
+          liveFechamentoOffset: offsetPorSemana(semanaFechamentoNum),
         })),
       };
       const r = await calcularPrevia({
@@ -296,6 +325,8 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         ...(gerarOfertas && {
           gerar_ofertas_ano_estreia: true,
           dia_semana_default: diaSemana,
+          semana_live: parseInt(semanaLive, 10) || 3,
+          duracao_disciplina_semanas: parseInt(duracaoSemanas, 10) || 4,
           pa_ch: parseInt(paCh, 10) || 60,
         }),
       },
@@ -303,44 +334,85 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
     });
   }
 
-  // S8 — Template Excel: download + upload
+  // Fase 8.9 — Template XLSX real com instruções, exemplos e validação
+  // por coluna. Muito mais didático que o CSV antigo. Estrutura: 2 abas
+  // (Disciplinas com dados + Instruções com o "como preencher").
   function baixarTemplate() {
-    // CSV simples (aceita como planilha no Excel/Google Sheets)
-    const rows = [
-      "Ordem,Nome da disciplina,CH,Tipo (A/C),Tem pre-requisito",
-      "1,Ex.: Admiravel Futuro Novo,20,C,nao",
-      "2,Ex.: Estrategias de Mercado,20,A,nao",
-      "3,,,,",
+    // Aba principal: cabeçalho amigável + 3 exemplos + linhas em branco.
+    const dadosAba = [
+      ["Ordem", "Nome da disciplina", "Carga horária (h)", "Tipo de oferta", "Tem pré-requisito?"],
+      [1, "Fundamentos de Marketing Digital", 20, "Exclusiva", "Não"],
+      [2, "Estratégias de Mercado", 24, "Exclusiva", "Não"],
+      [3, "Ética Digital", 20, "Compartilhada", "Sim"],
+      [4, "", "", "", ""],
+      [5, "", "", "", ""],
+      [6, "", "", "", ""],
+      [7, "", "", "", ""],
+      [8, "", "", "", ""],
     ];
-    const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "template-disciplinas.csv"; a.click();
-    URL.revokeObjectURL(url);
+    const wsDados = XLSX.utils.aoa_to_sheet(dadosAba);
+    wsDados["!cols"] = [
+      { wch: 8 }, { wch: 42 }, { wch: 18 }, { wch: 22 }, { wch: 20 },
+    ];
+
+    const instrucoes = [
+      ["Como preencher este template"],
+      [""],
+      ["1. Ordem — número sequencial da disciplina no carrossel (1, 2, 3…)."],
+      ["2. Nome da disciplina — nome completo, sem abreviações."],
+      ["3. Carga horária (h) — em horas. Exemplos: 20, 24, 40."],
+      ["4. Tipo de oferta:"],
+      ["   • Exclusiva — só este curso tem essa disciplina."],
+      ["   • Compartilhada — outros cursos também têm (mesma data no calendário)."],
+      ["5. Tem pré-requisito? — responda \"Sim\" ou \"Não\". \"Sim\" trava a ordem/dependência com a disciplina anterior."],
+      [""],
+      ["Depois de preencher, salve o arquivo e clique em \"Importar\" no formulário. As linhas em branco são ignoradas."],
+      [""],
+      ["Dúvidas? Fale com o time do calendário."],
+    ];
+    const wsInstr = XLSX.utils.aoa_to_sheet(instrucoes);
+    wsInstr["!cols"] = [{ wch: 90 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsDados, "Disciplinas");
+    XLSX.utils.book_append_sheet(wb, wsInstr, "Instruções");
+    XLSX.writeFile(wb, "template-novo-curso.xlsx");
   }
 
   async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    const linhas = text.replace(/^﻿/, "").split(/\r?\n/).slice(1).filter((l) => l.trim());
-    const parsed: DisciplinaLinha[] = linhas.map((linha, i) => {
-      const [_ord, nomeCol, chCol, tipoCol, preCol] = linha.split(",");
-      return {
-        ordem: i + 1,
-        nome: (nomeCol ?? "").trim(),
-        ch: parseInt(chCol ?? "20", 10) || 20,
-        tipo_oferta: ((tipoCol ?? "A").trim().toUpperCase() === "C" ? "C" : "A") as "A" | "C",
-        tem_pre_requisito: /^(sim|s|true|1|yes)$/i.test((preCol ?? "").trim()),
-      };
-    }).filter((d) => d.nome.length > 0);
-    if (parsed.length === 0) {
-      toast.error("Arquivo vazio ou formato invalido", { description: "Baixe o template e siga o cabecalho." });
-      return;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      // Aceita xlsx (com aba "Disciplinas") OU csv legado (primeira aba).
+      const nomeAba = wb.SheetNames.includes("Disciplinas") ? "Disciplinas" : wb.SheetNames[0];
+      const sheet = wb.Sheets[nomeAba];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      const parsed: DisciplinaLinha[] = rows.map((r, i) => {
+        const nome = String(r["Nome da disciplina"] ?? r["Nome"] ?? "").trim();
+        const chRaw = r["Carga horária (h)"] ?? r["CH"] ?? r["Carga horária"] ?? 20;
+        const tipoRaw = String(r["Tipo de oferta"] ?? r["Tipo"] ?? "Exclusiva").trim().toLowerCase();
+        const preRaw = String(r["Tem pré-requisito?"] ?? r["Pré-requisito"] ?? r["Tem pre-requisito"] ?? "não").trim().toLowerCase();
+        return {
+          ordem: i + 1,
+          nome,
+          ch: typeof chRaw === "number" ? chRaw : parseInt(String(chRaw), 10) || 20,
+          tipo_oferta: (tipoRaw.startsWith("c") ? "C" : "A") as "A" | "C",
+          tem_pre_requisito: /^(sim|s|true|1|yes|y)/i.test(preRaw),
+        };
+      }).filter((d) => d.nome.length > 0);
+      if (parsed.length === 0) {
+        toast.error("Arquivo vazio ou formato inválido", { description: "Baixe o template e siga o cabeçalho." });
+        return;
+      }
+      setDisciplinas(parsed);
+      toast.success(`${parsed.length} disciplina(s) importadas`);
+    } catch (err) {
+      toast.error("Falha ao ler o arquivo", { description: String(err instanceof Error ? err.message : err) });
+    } finally {
+      e.target.value = "";
     }
-    setDisciplinas(parsed);
-    toast.success(`${parsed.length} disciplina(s) importadas`);
-    e.target.value = "";
   }
 
   return (
@@ -400,7 +472,51 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
             </Select>
           </Campo>
         </div>
-        {/* S4+S5 — disciplinas dinamicas com pre-requisito, S8 template Excel */}
+        {/* Fase 8.9 — Bloco de template + importação em DESTAQUE, antes do
+            preenchimento manual. Estrutura "OU / OU": ou importa planilha,
+            ou preenche manualmente na tabela abaixo. */}
+        <div className="rounded-lg border-2 border-primary/40 bg-primary/5 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="rounded-full bg-primary/15 p-2 text-primary">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold">Caminho rápido: importe as disciplinas de uma planilha</div>
+              <div className="text-xs text-muted-foreground">Ou preencha manualmente na tabela logo abaixo. Não precisa fazer os dois.</div>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={baixarTemplate}
+              className="group flex items-start gap-3 rounded-md border bg-background p-3 text-left transition hover:border-primary/60 hover:bg-primary/5"
+            >
+              <div className="rounded-md bg-emerald-500/10 p-2 text-emerald-600 group-hover:bg-emerald-500/20">
+                <Download className="h-4 w-4" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium">1. Baixar template</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  Planilha .xlsx com cabeçalho amigável, exemplos e uma aba de instruções.
+                </div>
+              </div>
+            </button>
+            <label className="group flex cursor-pointer items-start gap-3 rounded-md border bg-background p-3 text-left transition hover:border-primary/60 hover:bg-primary/5">
+              <div className="rounded-md bg-sky-500/10 p-2 text-sky-600 group-hover:bg-sky-500/20">
+                <Upload className="h-4 w-4" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium">2. Enviar template preenchido</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  As disciplinas preenchem automaticamente a tabela abaixo. Você pode revisar antes de enviar.
+                </div>
+              </div>
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={upload} />
+            </label>
+          </div>
+        </div>
+
+        {/* S4+S5 — disciplinas dinamicas com pre-requisito (preenchimento manual) */}
         <div className="rounded-md border">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
             <div className="flex items-center gap-3">
@@ -410,14 +526,8 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
                 <Input type="number" min={0} value={disciplinas.length} onChange={(e) => setQuantidade(parseInt(e.target.value, 10) || 0)} className="h-7 w-16" />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={baixarTemplate}>
-                <Download className="mr-1 h-3 w-3" />Template
-              </Button>
-              <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent">
-                <Upload className="h-3 w-3" />Importar
-                <input type="file" accept=".csv,.txt" className="hidden" onChange={upload} />
-              </label>
+            <div className="text-xs text-muted-foreground">
+              Ou <button type="button" onClick={baixarTemplate} className="underline">baixe o template</button> e importe.
             </div>
           </div>
           <div className="max-h-96 overflow-y-auto p-2">
@@ -486,28 +596,40 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         <div className="mt-4 rounded-md border p-3">
           <div className="mb-2 font-medium text-sm">Gerar ofertas do 1º ano (opcional)</div>
           <p className="mb-3 text-xs text-muted-foreground">
-            Preencha pra o motor calcular e cadastrar as 16 entradas do ano de estreia junto com o curso. Deixe em branco pra criar só o cadastro do curso.
+            Preencha pra o motor calcular e cadastrar as 16 entradas do ano de lançamento junto com o curso. Deixe em branco pra criar só o cadastro do curso.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             <Campo label="Ano de lançamento">
               <Input type="number" value={anoEstreia} onChange={(e) => setAnoEstreia(e.target.value)} placeholder="2027" />
             </Campo>
             <Campo label="Dia da semana das lives">
-              <Select value={diaSemana} onValueChange={(v) => setDiaSemana(v as "quinta" | "quarta")}>
+              <Select value={diaSemana} onValueChange={(v) => setDiaSemana(v as DiaSemana)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="quinta">Quinta-feira</SelectItem>
-                  <SelectItem value="quarta">Quarta-feira</SelectItem>
+                  {DIAS_SEMANA.map((d) => (
+                    <SelectItem key={d.valor} value={d.valor}>{d.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </Campo>
           </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <Campo label="Data início da E1 (âncora)">
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <Campo label="Semana da live principal">
+              <Input type="number" min={1} max={12} value={semanaLive} onChange={(e) => setSemanaLive(e.target.value)} placeholder="3" />
+              <div className="mt-1 text-[10px] text-muted-foreground">Em que semana da disciplina a live acontece. A live de fechamento cai na semana seguinte.</div>
+            </Campo>
+            <Campo label="Duração da disciplina (semanas)">
+              <Input type="number" min={1} max={20} value={duracaoSemanas} onChange={(e) => setDuracaoSemanas(e.target.value)} placeholder="4" />
+              <div className="mt-1 text-[10px] text-muted-foreground">Padrão pós-graduação: 4 semanas.</div>
+            </Campo>
+            <Campo label="Data de início das aulas (E1)">
               <Input type="date" value={dataInicioE1} onChange={(e) => setDataInicioE1(e.target.value)} />
             </Campo>
-            <Campo label="Início da captação E1">
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Campo label="Início da captação E2">
               <Input type="date" value={captacaoInicio} onChange={(e) => setCaptacaoInicio(e.target.value)} />
+              <div className="mt-1 text-[10px] text-muted-foreground">Data em que a captação da E2 começa. A E1 é aberta por padrão junto com o lançamento.</div>
             </Campo>
           </div>
         </div>

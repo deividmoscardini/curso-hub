@@ -8,8 +8,8 @@ export type TipoCurso = "pos_graduacao" | "curso_livre" | "gmp" | "diplomado";
 export const TIPO_CURSO_LABEL: Record<TipoCurso, string> = {
   pos_graduacao: "Pós-Graduação",
   curso_livre: "Curso Livre",
-  gmp: "GMP",
-  diplomado: "Diplomado",
+  gmp: "GMP (Latam)",
+  diplomado: "Diplomado (Latam)",
 };
 
 export const TIPO_CURSO_DESC: Record<TipoCurso, string> = {
