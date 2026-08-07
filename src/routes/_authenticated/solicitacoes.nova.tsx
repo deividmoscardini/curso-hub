@@ -210,13 +210,13 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   const [siglaEditadaManualmente, setSiglaEditadaManualmente] = useState(false);
   const [nome, setNome] = useState("");
   const [escola, setEscola] = useState("");
-  const [chDefault, setChDefault] = useState("20");
   const [diaSemana, setDiaSemana] = useState<DiaSemana>("qui");
   const [semanaLive, setSemanaLive] = useState("3");
-  const [duracaoSemanas, setDuracaoSemanas] = useState("4");
+  const [duracaoDias, setDuracaoDias] = useState("28");
   const [anoEstreia, setAnoEstreia] = useState("");
   const [dataInicioE1, setDataInicioE1] = useState("");
-  const [captacaoInicio, setCaptacaoInicio] = useState("");
+  const [captacaoE1, setCaptacaoE1] = useState("");
+  const [captacaoE2, setCaptacaoE2] = useState("");
   const [paCh, setPaCh] = useState("60");
   const [gerandoPrevia, setGerandoPrevia] = useState(false);
   // S4+S5 — linhas dinamicas de disciplinas com pre-requisito
@@ -241,8 +241,9 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
     setTimeout(() => { if (!siglaEditadaManualmente) setSigla(siglaSugerida); }, 0);
   }
 
-  // Handlers das linhas de disciplina
-  const chNumDefault = parseInt(chDefault, 10) || 20;
+  // Handlers das linhas de disciplina. Como o CH padrao foi removido do
+  // form, novas linhas comecam com 20h (padrao pos-graduacao 411).
+  const chNumDefault = 20;
   function adicionarLinha() {
     setDisciplinas((ds) => [...ds, novaLinhaDisciplina(ds.length + 1, chNumDefault)]);
   }
@@ -268,7 +269,7 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
   const chTotal = disciplinasValidas.reduce((s, d) => s + (d.ch ?? 0), 0);
   const validacaoCh = validarChMinima(tipoCurso, chTotal);
 
-  const gerarOfertas = !!(anoEstreia && dataInicioE1 && captacaoInicio);
+  const gerarOfertas = !!(anoEstreia && dataInicioE1 && captacaoE1);
   const codigoOk = codigo.trim() || aguardandoCodigo;
   const podeEnviar = codigoOk && sigla.trim() && nome.trim() && !cursoDuplicado && disciplinasValidas.length > 0 && validacaoCh.ok;
 
@@ -315,9 +316,10 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         ancora: dataInicioE1,
         cod_curso: codigo.trim() || "PENDENTE",
         ordem_inicial: 1,
-        captacao_inicio: captacaoInicio,
+        captacao_inicio: captacaoE1,
+        captacao_e2: captacaoE2 || null,
         curso_master: cursoMaster,
-      });
+      }, t);
       setGerandoPrevia(false);
       if (!r) return; // erro já mostrou toast
       previa = { linhas: r.linhas, aviso: r.aviso };
@@ -338,7 +340,9 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
           gerar_ofertas_ano_estreia: true,
           dia_semana_default: diaSemana,
           semana_live: parseInt(semanaLive, 10) || 3,
-          duracao_disciplina_semanas: parseInt(duracaoSemanas, 10) || 4,
+          duracao_disciplina_dias: parseInt(duracaoDias, 10) || 28,
+          captacao_e1: captacaoE1,
+          captacao_e2: captacaoE2 || null,
           pa_ch: parseInt(paCh, 10) || 60,
         }),
       },
@@ -470,18 +474,9 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
             <Input value={sigla} onChange={(e) => { setSigla(e.target.value.toUpperCase()); setSiglaEditadaManualmente(true); }} placeholder="SIG" maxLength={3} />
           </Campo>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Campo label={t("solicitacao_nova.escola")}><Input value={escola} onChange={(e) => setEscola(e.target.value)} placeholder={t("solicitacao_nova.escola_placeholder")} /></Campo>
-          <Campo label={t("solicitacao_nova.ch_padrao")}>
-            <Select value={chDefault} onValueChange={setChDefault}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="20">20h</SelectItem>
-                <SelectItem value="24">24h</SelectItem>
-              </SelectContent>
-            </Select>
-          </Campo>
-        </div>
+        <Campo label={t("solicitacao_nova.escola")}>
+          <Input value={escola} onChange={(e) => setEscola(e.target.value)} placeholder={t("solicitacao_nova.escola_placeholder")} />
+        </Campo>
         {/* Fase 8.9 — Bloco de template + importação em DESTAQUE, antes do
             preenchimento manual. Estrutura "OU / OU": ou importa planilha,
             ou preenche manualmente na tabela abaixo. */}
@@ -599,13 +594,32 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
           </div>
         )}
 
+        {/* Fase 8.10 — Ordem: (a) ano de lancamento, (b) 1a captacao,
+            (c) inicio das aulas, (d) duracao (dias), (e) dia da semana,
+            (f) semana da live, (g) 2a captacao. Layout em 3 colunas. */}
         <div className="mt-4 rounded-md border p-3">
           <div className="mb-2 font-medium text-sm">{t("solicitacao_nova.bloco_ofertas")}</div>
           <p className="mb-3 text-xs text-muted-foreground">{t("solicitacao_nova.bloco_ofertas_desc")}</p>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
+            {/* (a) Ano de lançamento */}
             <Campo label={t("solicitacao_nova.ano_lancamento")}>
-              <Input type="number" value={anoEstreia} onChange={(e) => setAnoEstreia(e.target.value)} placeholder="2027" />
+              <Input type="number" min={2000} value={anoEstreia} onChange={(e) => setAnoEstreia(e.target.value)} placeholder="2027" />
             </Campo>
+            {/* (b) Data de início da 1ª janela de captação */}
+            <Campo label={t("solicitacao_nova.captacao_e1")}>
+              <Input type="date" value={captacaoE1} onChange={(e) => setCaptacaoE1(e.target.value)} />
+              <div className="mt-1 text-[10px] text-muted-foreground">{t("solicitacao_nova.captacao_e1_desc")}</div>
+            </Campo>
+            {/* (c) Data de início das aulas */}
+            <Campo label={t("solicitacao_nova.data_inicio_aulas")}>
+              <Input type="date" value={dataInicioE1} onChange={(e) => setDataInicioE1(e.target.value)} />
+            </Campo>
+            {/* (d) Duração da disciplina (dias) */}
+            <Campo label={t("solicitacao_nova.duracao_dias")}>
+              <Input type="number" min={1} max={365} value={duracaoDias} onChange={(e) => setDuracaoDias(e.target.value)} placeholder="28" />
+              <div className="mt-1 text-[10px] text-muted-foreground">{t("solicitacao_nova.duracao_dias_desc")}</div>
+            </Campo>
+            {/* (e) Dia da semana da live */}
             <Campo label={t("solicitacao_nova.dia_semana_live")}>
               <Select value={diaSemana} onValueChange={(v) => setDiaSemana(v as DiaSemana)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -616,23 +630,14 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
                 </SelectContent>
               </Select>
             </Campo>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {/* (f) Semana da live */}
             <Campo label={t("solicitacao_nova.semana_live")}>
               <Input type="number" min={1} max={12} value={semanaLive} onChange={(e) => setSemanaLive(e.target.value)} placeholder="3" />
               <div className="mt-1 text-[10px] text-muted-foreground">{t("solicitacao_nova.semana_live_desc")}</div>
             </Campo>
-            <Campo label={t("solicitacao_nova.duracao_semanas")}>
-              <Input type="number" min={1} max={20} value={duracaoSemanas} onChange={(e) => setDuracaoSemanas(e.target.value)} placeholder="4" />
-              <div className="mt-1 text-[10px] text-muted-foreground">{t("solicitacao_nova.duracao_semanas_desc")}</div>
-            </Campo>
-            <Campo label={t("solicitacao_nova.data_inicio_aulas")}>
-              <Input type="date" value={dataInicioE1} onChange={(e) => setDataInicioE1(e.target.value)} />
-            </Campo>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {/* (g) Início da 2ª janela de captação */}
             <Campo label={t("solicitacao_nova.captacao_e2")}>
-              <Input type="date" value={captacaoInicio} onChange={(e) => setCaptacaoInicio(e.target.value)} />
+              <Input type="date" value={captacaoE2} onChange={(e) => setCaptacaoE2(e.target.value)} />
               <div className="mt-1 text-[10px] text-muted-foreground">{t("solicitacao_nova.captacao_e2_desc")}</div>
             </Campo>
           </div>
