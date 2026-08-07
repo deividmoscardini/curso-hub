@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CalendarDays, AlertTriangle, History } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/calendario/")({
   head: () => ({
@@ -51,6 +52,13 @@ const ABA_LABEL: Record<Aba, string> = {
 
 function CalendarioPage() {
   const { tenantId, tenants, loading } = useTenant();
+  const { t } = useT();
+  const ABA_LABEL_LOCAL: Record<Aba, string> = {
+    disciplinas: t("calendario.aba_disciplinas"),
+    projeto_aplicacao: t("calendario.aba_projeto_aplicacao"),
+    prova_substitutiva: t("calendario.aba_prova_substitutiva"),
+    fechamento: t("calendario.aba_fechamento"),
+  };
   const [aba, setAba] = useState<Aba>("disciplinas");
   const [busca, setBusca] = useState("");
   const [anoFiltro, setAnoFiltro] = useState<string>("");
@@ -116,21 +124,21 @@ function CalendarioPage() {
 
   if (loading) {
     return (
-      <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>
+      <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>
     );
   }
   if (tenants.length === 0) {
     return (
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
-          Você ainda não é membro de nenhum produto. Peça a um administrador da +A pra ser adicionado.
+          {t("calendario.sem_membro")}
         </CardContent>
       </Card>
     );
   }
   if (!tenantId) {
     return (
-      <Card><CardContent className="pt-6 text-sm text-muted-foreground">Selecione um produto no menu lateral…</CardContent></Card>
+      <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.escolha_produto")}</CardContent></Card>
     );
   }
 
@@ -138,24 +146,22 @@ function CalendarioPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Calendário</h1>
-          <p className="text-sm text-muted-foreground">
-            Visão viva do calendário do produto selecionado.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("calendario.titulo")}</h1>
+          <p className="text-sm text-muted-foreground">{t("calendario.subtitulo")}</p>
         </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
-        {(Object.keys(ABA_LABEL) as Aba[]).map((a) => (
+        {(Object.keys(ABA_LABEL_LOCAL) as Aba[]).map((a) => (
           <Card key={a} className={aba === a ? "border-primary" : ""}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{ABA_LABEL[a]}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">{ABA_LABEL_LOCAL[a]}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-semibold">
-                {(totais?.[a] ?? 0).toLocaleString("pt-BR")}
+                {(totais?.[a] ?? 0).toLocaleString()}
               </div>
-              <div className="text-[10px] text-muted-foreground">linhas</div>
+              <div className="text-[10px] text-muted-foreground">{t("calendario.linhas")}</div>
             </CardContent>
           </Card>
         ))}
@@ -163,15 +169,15 @@ function CalendarioPage() {
 
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
         <TabsList>
-          {(Object.keys(ABA_LABEL) as Aba[]).map((a) => (
-            <TabsTrigger key={a} value={a}>{ABA_LABEL[a]}</TabsTrigger>
+          {(Object.keys(ABA_LABEL_LOCAL) as Aba[]).map((a) => (
+            <TabsTrigger key={a} value={a}>{ABA_LABEL_LOCAL[a]}</TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
 
       <div className="flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Buscar…"
+          placeholder={t("calendario.busca_placeholder")}
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           className="max-w-xs"
@@ -181,23 +187,23 @@ function CalendarioPage() {
           onChange={(e) => setAnoFiltro(e.target.value)}
           className="rounded-md border bg-background px-3 py-1.5 text-sm"
         >
-          <option value="">Todos os anos</option>
+          <option value="">{t("calendario.todos_anos")}</option>
           {anos.map((a) => (
             <option key={a} value={a}>{a}</option>
           ))}
         </select>
         <div className="ml-auto text-xs text-muted-foreground">
-          {filtradas.length.toLocaleString("pt-BR")} linhas
+          {t("calendario.contador_linhas", { n: filtradas.length.toLocaleString() })}
         </div>
       </div>
 
       {isLoading ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>
       ) : filtradas.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center text-sm text-muted-foreground">
             <CalendarDays className="mx-auto mb-2 h-8 w-8 opacity-50" />
-            Nenhuma linha nesta aba. Importe a planilha em <a href="/produtos" className="underline">Produtos</a>.
+            {t("calendario.sem_linhas_importe")}
           </CardContent>
         </Card>
       ) : (
@@ -205,13 +211,13 @@ function CalendarioPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="p-2">Ano</th>
-                <th className="p-2">Ordem</th>
+                <th className="p-2">{t("calendario.ano")}</th>
+                <th className="p-2">{t("calendario.ordem")}</th>
                 {colunas.map((c) => (
                   <th key={c} className="p-2">{c}</th>
                 ))}
-                <th className="p-2">Histórico</th>
-                <th className="p-2">Conflitos</th>
+                <th className="p-2">{t("calendario.historico")}</th>
+                <th className="p-2">{t("calendario.conflitos")}</th>
               </tr>
             </thead>
             <tbody>
@@ -244,8 +250,7 @@ function CalendarioPage() {
           </table>
           {filtradas.length > 200 && (
             <div className="border-t bg-muted/20 p-2 text-center text-xs text-muted-foreground">
-              Mostrando primeiras 200 de {filtradas.length.toLocaleString("pt-BR")} linhas.
-              Refine os filtros pra ver mais.
+              {t("calendario.mostrando_primeiras", { n: 200, total: filtradas.length.toLocaleString() })} {t("calendario.refine_filtros")}
             </div>
           )}
         </div>
@@ -262,6 +267,7 @@ function formatarCelula(v: unknown): string {
 
 // Fase 8 — Badge + popover mostrando histórico de alterações da linha.
 function HistoricoBadge({ eventos }: { eventos: EventoComentario[] }) {
+  const { t } = useT();
   const ultimos = [...eventos].sort((a, b) => b.criado_em.localeCompare(a.criado_em));
   return (
     <Popover>
@@ -269,7 +275,7 @@ function HistoricoBadge({ eventos }: { eventos: EventoComentario[] }) {
         <button
           type="button"
           className="inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-800 hover:bg-sky-500/20 dark:text-sky-300"
-          aria-label={`${eventos.length} alterações registradas`}
+          aria-label={t("calendario.n_alteracoes_reg", { n: eventos.length })}
         >
           <History className="h-3 w-3" />
           {eventos.length}
@@ -277,13 +283,15 @@ function HistoricoBadge({ eventos }: { eventos: EventoComentario[] }) {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 p-0">
         <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium">
-          Histórico ({eventos.length} {eventos.length === 1 ? "alteração" : "alterações"})
+          {eventos.length === 1
+            ? t("calendario.historico_qtd_um", { n: eventos.length })
+            : t("calendario.historico_qtd_mais", { n: eventos.length })}
         </div>
         <ul className="max-h-80 divide-y overflow-y-auto">
           {ultimos.map((ev, i) => (
             <li key={i} className="p-3 text-xs">
               <div className="flex items-center justify-between text-muted-foreground">
-                <span className="font-mono">{new Date(ev.criado_em).toLocaleString("pt-BR")}</span>
+                <span className="font-mono">{new Date(ev.criado_em).toLocaleString()}</span>
                 {ev.tipo && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{ev.tipo}</span>}
               </div>
               {ev.campo_alterado && (

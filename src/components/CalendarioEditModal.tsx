@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, AlertTriangle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/contexts/i18n";
 
 export interface LinhaEditavel {
   id: string;
@@ -38,6 +39,7 @@ function ehCampoDeData(chave: string, valor: unknown): boolean {
 }
 
 export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
+  const { t } = useT();
   const chaves = useMemo(() => Object.keys(linha.dados), [linha.dados]);
   const [valores, setValores] = useState<Record<string, string>>(() =>
     Object.fromEntries(chaves.map((k) => [k, String((linha.dados as Record<string, unknown>)[k] ?? "")]))
@@ -52,8 +54,8 @@ export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
   });
 
   async function salvar() {
-    if (!motivo.trim()) { toast.error("Motivo obrigatório"); return; }
-    if (alterados.length === 0) { toast.error("Nenhum campo alterado"); return; }
+    if (!motivo.trim()) { toast.error(t("solicitacao_nova.motivo_obrigatorio_toast") ?? "Motivo obrigatório"); return; }
+    if (alterados.length === 0) { toast.error(t("admin_calendario.nenhum_alterado")); return; }
 
     setPending(true);
     const { data: user } = await supabase.auth.getUser();
@@ -82,7 +84,7 @@ export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
       .from("calendario_linhas")
       .update({ dados: novosDados, comentarios })
       .eq("id", linha.id);
-    if (error) { setPending(false); toast.error("Falha ao salvar", { description: error.message }); return; }
+    if (error) { setPending(false); toast.error(t("solicitacao_nova.falha_criar"), { description: error.message }); return; }
 
     await supabase.from("log_auditoria").insert({
       tenant_id: linha.tenant_id, ator_id: uid,
@@ -91,13 +93,13 @@ export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
     });
 
     setPending(false);
-    toast.success(`Linha atualizada — ${alterados.length} campo${alterados.length > 1 ? "s" : ""}.`);
+    toast.success(t("admin_calendario.linha_atualizada", { n: alterados.length, s: alterados.length > 1 ? "s" : "" }));
     onSaved();
     onClose();
   }
 
   async function excluir() {
-    if (!motivo.trim()) { toast.error("Motivo obrigatório"); return; }
+    if (!motivo.trim()) { toast.error(t("solicitacao_nova.motivo_obrigatorio_toast") ?? "Motivo obrigatório"); return; }
     setPending(true);
     const { data: user } = await supabase.auth.getUser();
     const uid = user.user?.id;
@@ -110,8 +112,8 @@ export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
     });
     const { error } = await supabase.from("calendario_linhas").delete().eq("id", linha.id);
     setPending(false);
-    if (error) { toast.error("Falha ao excluir", { description: error.message }); return; }
-    toast.success("Linha excluída.");
+    if (error) { toast.error(t("solicitacao_nova.falha_criar"), { description: error.message }); return; }
+    toast.success(t("admin_calendario.linha_excluida"));
     onSaved();
     onClose();
   }
@@ -120,7 +122,7 @@ export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{modo === "editar" ? "Editar linha do calendário" : "Excluir linha do calendário"}</DialogTitle>
+          <DialogTitle>{modo === "editar" ? t("admin_calendario.editar_titulo") : t("admin_calendario.excluir_titulo")}</DialogTitle>
           <DialogDescription className="font-mono text-xs">{linha.chave_natural}</DialogDescription>
         </DialogHeader>
 
@@ -148,33 +150,33 @@ export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
           <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-800 dark:text-red-300">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div>Ação irreversível. A linha some do calendário e do histórico visual — o registro fica só em log_auditoria.</div>
+              <div>{t("admin_calendario.excluir_aviso")}</div>
             </div>
           </div>
         )}
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Motivo *</label>
-          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder="Por que essa mudança administrativa? (Fica visível no calendário.)" />
+          <label className="text-sm font-medium">{t("comum.motivo_obrigatorio")}</label>
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder={t("admin_calendario.motivo_placeholder")} />
         </div>
 
         <DialogFooter className="justify-between">
           {modo === "editar" ? (
             <Button variant="ghost" onClick={() => setModo("excluir")} className="text-red-600 hover:text-red-700 hover:bg-red-500/10">
-              <Trash2 className="mr-1 h-4 w-4" />Excluir linha
+              <Trash2 className="mr-1 h-4 w-4" />{t("admin_calendario.excluir_linha")}
             </Button>
           ) : (
-            <Button variant="ghost" onClick={() => setModo("editar")} disabled={pending}>← Voltar pra edição</Button>
+            <Button variant="ghost" onClick={() => setModo("editar")} disabled={pending}>{t("admin_calendario.voltar_edicao")}</Button>
           )}
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={pending}>Cancelar</Button>
+            <Button variant="outline" onClick={onClose} disabled={pending}>{t("comum.cancelar")}</Button>
             {modo === "editar" ? (
               <Button onClick={salvar} disabled={pending || !motivo.trim() || alterados.length === 0}>
-                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar {alterados.length > 0 && `(${alterados.length})`}
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{t("admin_calendario.salvar_com_n", { n: alterados.length })}
               </Button>
             ) : (
               <Button variant="destructive" onClick={excluir} disabled={pending || !motivo.trim()}>
-                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirmar exclusão
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{t("admin_calendario.confirmar_exclusao")}
               </Button>
             )}
           </div>

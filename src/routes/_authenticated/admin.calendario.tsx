@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Pencil, ArrowLeft } from "lucide-react";
 import { CalendarioEditModal, type LinhaEditavel } from "@/components/CalendarioEditModal";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/admin/calendario")({
   head: () => ({ meta: [{ title: "Calendário — Admin" }] }),
@@ -33,7 +34,14 @@ const ABA_LABEL: Record<Aba, string> = {
 
 function AdminCalendarioPage() {
   const { tenantId, perfil } = useTenant();
+  const { t } = useT();
   const qc = useQueryClient();
+  const ABA_LABEL_LOCAL: Record<Aba, string> = {
+    disciplinas: t("calendario.aba_disciplinas"),
+    projeto_aplicacao: t("calendario.aba_projeto_aplicacao"),
+    prova_substitutiva: t("calendario.aba_prova_substitutiva"),
+    fechamento: t("calendario.aba_fechamento"),
+  };
   const [aba, setAba] = useState<Aba>("disciplinas");
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState<LinhaEditavel | null>(null);
@@ -41,12 +49,12 @@ function AdminCalendarioPage() {
   if (!perfil?.admin_global) {
     return (
       <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-        Só administradores globais podem acessar essa tela.
+        {t("comum.sem_permissao_admin")}
       </CardContent></Card>
     );
   }
   if (!tenantId) {
-    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">Selecione um produto no menu lateral.</CardContent></Card>;
+    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.escolha_produto")}</CardContent></Card>;
   }
 
   const { data: linhas, isLoading } = useQuery({
@@ -84,51 +92,43 @@ function AdminCalendarioPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/calendario"><ArrowLeft className="mr-1 h-4 w-4" />Calendário público</Link>
+          <Link to="/calendario"><ArrowLeft className="mr-1 h-4 w-4" />{t("admin_calendario.calendario_publico")}</Link>
         </Button>
       </div>
 
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Calendário — modo admin</h1>
-        <p className="text-sm text-muted-foreground">
-          Edite ou exclua linhas direto pra cenários que estão fora do fluxo de solicitação (prova
-          substitutiva, fechamento, cancelamento de oferta). Motivo é sempre obrigatório e fica
-          registrado no calendário público.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("admin_calendario.titulo")}</h1>
+        <p className="text-sm text-muted-foreground">{t("admin_calendario.subtitulo")}</p>
       </div>
 
       <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <div>
-          Alterações feitas aqui <span className="font-medium">não passam pelo fluxo de aprovação</span>. Use com
-          cuidado — cada alteração aparece no histórico da linha (badge no calendário público) com o
-          seu nome.
-        </div>
+        <div>{t("admin_calendario.aviso")}</div>
       </div>
 
       <div className="flex items-center gap-2">
         <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
           <TabsList>
             {(["disciplinas", "projeto_aplicacao", "prova_substitutiva", "fechamento"] as const).map((a) => (
-              <TabsTrigger key={a} value={a}>{ABA_LABEL[a]}</TabsTrigger>
+              <TabsTrigger key={a} value={a}>{ABA_LABEL_LOCAL[a]}</TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
-        <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por código, curso, disciplina…" className="max-w-sm" />
+        <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={t("admin_calendario.busca_placeholder_admin")} className="max-w-sm" />
       </div>
 
       {isLoading ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>
       ) : filtradas.length === 0 ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Sem linhas nessa aba.</CardContent></Card>
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("admin_calendario.sem_linhas_aba_curto")}</CardContent></Card>
       ) : (
         <div className="overflow-x-auto rounded-md border bg-background">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="p-2">Chave</th>
+                <th className="p-2">{t("admin_calendario.chave")}</th>
                 {colunas.map((c) => (<th key={c} className="p-2">{c}</th>))}
-                <th className="p-2">Histórico</th>
+                <th className="p-2">{t("calendario.historico")}</th>
                 <th className="p-2"></th>
               </tr>
             </thead>
@@ -155,7 +155,7 @@ function AdminCalendarioPage() {
                     </td>
                     <td className="p-2 text-right">
                       <Button size="sm" variant="ghost" onClick={() => setEditando(l)}>
-                        <Pencil className="mr-1 h-3 w-3" />Editar
+                        <Pencil className="mr-1 h-3 w-3" />{t("comum.editar")}
                       </Button>
                     </td>
                   </tr>
@@ -165,7 +165,7 @@ function AdminCalendarioPage() {
           </table>
           {filtradas.length > 200 && (
             <div className="border-t bg-muted/20 p-2 text-center text-xs text-muted-foreground">
-              Mostrando primeiras 200 de {filtradas.length.toLocaleString("pt-BR")} linhas.
+              {t("admin_calendario.mostrando_admin", { n: 200, total: filtradas.length.toLocaleString() })}
             </div>
           )}
         </div>

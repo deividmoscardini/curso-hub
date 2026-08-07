@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Loader2, Check, X, RotateCcw, AlertTriangle, Copy, TrendingUp } from "lucide-react";
 import { acharSimilar } from "@/lib/similaridade";
 import { validarChMinima, TIPO_CURSO_LABEL, type TipoCurso } from "@/lib/regras-tipo-curso";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/$id")({
   head: () => ({ meta: [{ title: "Solicitação — Calendário +A" }] }),
@@ -54,6 +55,15 @@ function SolicitacaoDetalhePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { perfil, papel } = useTenant();
+  const { t } = useT();
+  const STATUS_LABEL_LOCAL: Record<string, string> = {
+    pendente: t("solicitacao_detalhe.status_pendente"),
+    em_revisao: t("solicitacao_detalhe.status_pendente"),
+    aprovada: t("solicitacao_detalhe.status_aprovada"),
+    aplicada: t("solicitacao_detalhe.status_aplicada"),
+    rejeitada: t("solicitacao_detalhe.status_rejeitada"),
+    devolvida: t("solicitacao_detalhe.status_devolvida"),
+  };
   const [rejeitando, setRejeitando] = useState(false);
   const [devolvendo, setDevolvendo] = useState(false);
   // Fase 7.7 — A8: cada disciplina/linha marcada localmente como "OK" antes
@@ -98,15 +108,15 @@ function SolicitacaoDetalhePage() {
         body: JSON.stringify({ solicitacao_id: id, ...payload }),
       });
       const json = await resp.json();
-      if (!resp.ok || json.error) throw new Error(json.error ?? "Erro");
+      if (!resp.ok || json.error) throw new Error(json.error ?? t("solicitacao_detalhe.erro"));
       return json;
     },
     onSuccess: (r) => {
-      toast.success(`Solicitação ${r.status}`);
+      toast.success(t("solicitacao_detalhe.solicitacao_status", { status: STATUS_LABEL_LOCAL[r.status] ?? r.status }));
       qc.invalidateQueries();
       setRejeitando(false); setDevolvendo(false);
     },
-    onError: (err: Error) => toast.error("Falha", { description: err.message }),
+    onError: (err: Error) => toast.error(t("solicitacao_detalhe.falha"), { description: err.message }),
   });
 
   // Fase 7 — Analises estruturais visiveis ao aprovador (so em novo_curso)
@@ -118,13 +128,13 @@ function SolicitacaoDetalhePage() {
     : [];
   const todasLinhasOk = chavesLinhas.length === 0 || chavesLinhas.every((c: string) => linhasOk.has(c));
 
-  if (!sol) return <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>;
+  if (!sol) return <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/solicitacoes" })}>
-          <ArrowLeft className="mr-1 h-4 w-4" />Voltar
+          <ArrowLeft className="mr-1 h-4 w-4" />{t("comum.voltar")}
         </Button>
       </div>
 
@@ -133,29 +143,29 @@ function SolicitacaoDetalhePage() {
           <div className="mb-1 flex items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight capitalize">{sol.tipo.replace(/_/g, " ")}</h1>
             <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_CLS[sol.status] ?? ""}`}>
-              {STATUS_LABEL[sol.status] ?? sol.status}
+              {STATUS_LABEL_LOCAL[sol.status] ?? sol.status}
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            {sol.tenants?.nome} · pedido por {sol.solicitante?.nome} em {new Date(sol.criado_em).toLocaleString("pt-BR")}
+            {sol.tenants?.nome} · {t("solicitacao_detalhe.pedido_por", { nome: sol.solicitante?.nome ?? "", data: new Date(sol.criado_em).toLocaleString() })}
           </p>
         </div>
         {podeDecidir && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setDevolvendo(true)}>
-              <RotateCcw className="mr-1 h-4 w-4" />Devolver
+              <RotateCcw className="mr-1 h-4 w-4" />{t("comum.devolver")}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setRejeitando(true)}>
-              <X className="mr-1 h-4 w-4" />Rejeitar
+              <X className="mr-1 h-4 w-4" />{t("comum.rejeitar")}
             </Button>
             <Button
               size="sm"
               onClick={() => aplicar.mutate({ decisao: "aprovar" })}
               disabled={aplicar.isPending || !todasLinhasOk}
-              title={!todasLinhasOk ? "Marque todas as linhas como OK antes de aprovar" : undefined}
+              title={!todasLinhasOk ? t("solicitacao_detalhe.tooltip_marcar_todas") : undefined}
             >
               {aplicar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
-              Aprovar {chavesLinhas.length > 0 && `(${linhasOk.size}/${chavesLinhas.length})`}
+              {t("comum.aprovar")} {chavesLinhas.length > 0 && `(${linhasOk.size}/${chavesLinhas.length})`}
             </Button>
           </div>
         )}
@@ -163,7 +173,7 @@ function SolicitacaoDetalhePage() {
 
       {sol.motivo_rejeicao && (
         <Card className="border-rose-500/40">
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Motivo da rejeição</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">{t("solicitacao_detalhe.motivo_rejeicao")}</CardTitle></CardHeader>
           <CardContent><p className="text-sm">{sol.motivo_rejeicao}</p></CardContent>
         </Card>
       )}
@@ -176,9 +186,9 @@ function SolicitacaoDetalhePage() {
               <TrendingUp className={`h-5 w-5 ${analise.totalizador.validacao.ok ? "text-emerald-600" : "text-rose-600"}`} />
               <div className="flex-1">
                 <div className="text-sm font-medium">
-                  Carga horária total: {analise.totalizador.ch_total}h
+                  {t("solicitacao_detalhe.ch_total_lbl", { n: analise.totalizador.ch_total })}
                   {analise.totalizador.validacao.ch_minima > 0 && (
-                    <span className="text-muted-foreground"> / mínimo {analise.totalizador.validacao.ch_minima}h</span>
+                    <span className="text-muted-foreground"> {t("solicitacao_detalhe.ch_minimo_lbl", { n: analise.totalizador.validacao.ch_minima })}</span>
                   )}
                 </div>
                 {!analise.totalizador.validacao.ok && (
@@ -200,14 +210,14 @@ function SolicitacaoDetalhePage() {
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
-              <Copy className="h-4 w-4" />Possíveis duplicatas ({analise.duplicatas.length})
+              <Copy className="h-4 w-4" />{t("solicitacao_detalhe.duplicatas_titulo", { n: analise.duplicatas.length })}
             </CardTitle>
-            <CardDescription>Estas disciplinas parecem já existir. Considere reusar em vez de duplicar.</CardDescription>
+            <CardDescription>{t("solicitacao_detalhe.duplicatas_desc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {analise.duplicatas.map((d, i) => (
               <div key={i} className="text-xs">
-                <div><span className="font-medium">"{d.novo_nome}"</span> — sugestão: reusar <span className="font-mono">{d.similar_nome}</span> ({Math.round(d.score * 100)}% similar)</div>
+                <div><span className="font-medium">"{d.novo_nome}"</span> — {t("solicitacao_detalhe.duplicatas_linha", { codigo: d.similar_nome, score: Math.round(d.score * 100) })}</div>
               </div>
             ))}
           </CardContent>
@@ -219,14 +229,14 @@ function SolicitacaoDetalhePage() {
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
-              <AlertTriangle className="h-4 w-4" />Divergência de carga horária ({analise.divergencias.length})
+              <AlertTriangle className="h-4 w-4" />{t("solicitacao_detalhe.divergencias_titulo", { n: analise.divergencias.length })}
             </CardTitle>
-            <CardDescription>Disciplinas com mesmo nome têm CH diferente em outros cursos.</CardDescription>
+            <CardDescription>{t("solicitacao_detalhe.divergencias_desc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {analise.divergencias.map((d, i) => (
               <div key={i} className="text-xs">
-                <span className="font-medium">"{d.nome}"</span>: aqui {d.ch_novo}h, mas outros cursos usam {d.ch_existentes}h.
+                <span className="font-medium">"{d.nome}"</span>: {t("solicitacao_detalhe.divergencias_linha", { novo: d.ch_novo, existentes: d.ch_existentes })}
               </div>
             ))}
           </CardContent>
@@ -238,14 +248,14 @@ function SolicitacaoDetalhePage() {
         <Card className="border-sky-500/40 bg-sky-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm text-sky-800 dark:text-sky-300">
-              <AlertTriangle className="h-4 w-4" />Disciplinas compartilhadas ({analise.compartilhadas.length})
+              <AlertTriangle className="h-4 w-4" />{t("solicitacao_detalhe.compartilhadas_titulo", { n: analise.compartilhadas.length })}
             </CardTitle>
-            <CardDescription>Estas disciplinas estão marcadas como compartilhadas (tipo C) e já existem em outros cursos. Confira no calendário se as datas de oferta batem antes de aprovar.</CardDescription>
+            <CardDescription>{t("solicitacao_detalhe.compartilhadas_desc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {analise.compartilhadas.map((c, i) => (
               <div key={i} className="text-xs">
-                <span className="font-medium">"{c.nome}"</span> — já em: {c.cursos.slice(0, 5).join(", ")}{c.cursos.length > 5 && ` + ${c.cursos.length - 5} outros`}
+                <span className="font-medium">"{c.nome}"</span> — {t("solicitacao_detalhe.compartilhadas_ja_em", { cursos: c.cursos.slice(0, 5).join(", ") })}{c.cursos.length > 5 && ` ${t("solicitacao_detalhe.compartilhadas_outros", { n: c.cursos.length - 5 })}`}
               </div>
             ))}
           </CardContent>
@@ -257,14 +267,14 @@ function SolicitacaoDetalhePage() {
         <Card className="border-slate-400/40 bg-slate-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-300">
-              <AlertTriangle className="h-4 w-4" />Revisão ortográfica ({analise.ortografia.length})
+              <AlertTriangle className="h-4 w-4" />{t("solicitacao_detalhe.ortografia_titulo", { n: analise.ortografia.length })}
             </CardTitle>
-            <CardDescription>Nomes com formatação incomum. Não bloqueia, é só um ping pro revisor.</CardDescription>
+            <CardDescription>{t("solicitacao_detalhe.ortografia_desc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {analise.ortografia.map((o, i) => (
               <div key={i} className="text-xs">
-                <span className="font-medium">"{o.nome}"</span> — {o.problema}
+                <span className="font-medium">"{o.nome}"</span> — {t(o.problema)}
               </div>
             ))}
           </CardContent>
@@ -275,22 +285,20 @@ function SolicitacaoDetalhePage() {
       {sol.tipo === "novo_curso" && chavesLinhas.length > 0 && podeDecidir && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Disciplinas do curso ({chavesLinhas.length})</CardTitle>
-            <CardDescription>
-              Revise cada linha e marque como OK antes de aprovar. Se algo estiver errado, use "Devolver" com um comentário pro solicitante ajustar.
-            </CardDescription>
+            <CardTitle className="text-base">{t("solicitacao_detalhe.disciplinas_curso_titulo", { n: chavesLinhas.length })}</CardTitle>
+            <CardDescription>{t("solicitacao_detalhe.disciplinas_curso_desc")}</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="w-16 p-2 text-center">OK?</th>
+                    <th className="w-16 p-2 text-center">{t("solicitacao_detalhe.ok")}</th>
                     <th className="w-10 p-2">#</th>
-                    <th className="p-2">Disciplina</th>
-                    <th className="w-16 p-2">CH</th>
-                    <th className="w-20 p-2">Tipo</th>
-                    <th className="w-24 p-2 text-center">Pré-req</th>
+                    <th className="p-2">{t("solicitacao_detalhe.disciplina_col")}</th>
+                    <th className="w-16 p-2">{t("solicitacao_nova.ch")}</th>
+                    <th className="w-20 p-2">{t("solicitacao_detalhe.tipo_col")}</th>
+                    <th className="w-24 p-2 text-center">{t("solicitacao_nova.pre_requisito")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -305,8 +313,8 @@ function SolicitacaoDetalhePage() {
                         <td className="p-2 text-xs text-muted-foreground">{d.ordem ?? i + 1}</td>
                         <td className="p-2 font-medium">{d.nome}</td>
                         <td className="p-2 text-xs">{d.ch ?? "—"}h</td>
-                        <td className="p-2 text-xs">{d.tipo_oferta === "C" ? "Compartilhada" : "Exclusiva"}</td>
-                        <td className="p-2 text-center text-xs">{d.tem_pre_requisito ? "Sim" : "—"}</td>
+                        <td className="p-2 text-xs">{d.tipo_oferta === "C" ? t("solicitacao_detalhe.tipo_c_curto") : t("solicitacao_detalhe.tipo_a_curto")}</td>
+                        <td className="p-2 text-center text-xs">{d.tem_pre_requisito ? t("comum.sim") : "—"}</td>
                       </tr>
                     );
                   })}
@@ -314,8 +322,8 @@ function SolicitacaoDetalhePage() {
               </table>
             </div>
             <div className="border-t bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              {linhasOk.size} de {chavesLinhas.length} marcadas como OK.
-              {linhasOk.size < chavesLinhas.length && " Aprovar só habilita quando todas estiverem marcadas."}
+              {t("solicitacao_detalhe.marcadas_como_ok", { ok: linhasOk.size, total: chavesLinhas.length })}
+              {linhasOk.size < chavesLinhas.length && t("solicitacao_detalhe.aprovar_liberado_quando")}
             </div>
           </CardContent>
         </Card>
@@ -325,7 +333,7 @@ function SolicitacaoDetalhePage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-base">Dados do pedido</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("solicitacao_detalhe.dados_pedido")}</CardTitle></CardHeader>
           <CardContent>
             <pre className="max-h-96 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
               {JSON.stringify(sol.payload, null, 2)}
@@ -335,9 +343,9 @@ function SolicitacaoDetalhePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Prévia do motor</CardTitle>
+            <CardTitle className="text-base">{t("solicitacao_detalhe.previa_motor")}</CardTitle>
             <CardDescription>
-              {sol.previa ? "Linhas calculadas antes de aplicar." : "Sem prévia calculada (esse tipo pode não gerar prévia via motor)."}
+              {sol.previa ? t("solicitacao_detalhe.previa_desc") : t("solicitacao_detalhe.previa_vazia")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -353,21 +361,21 @@ function SolicitacaoDetalhePage() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Timeline</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("solicitacao_detalhe.timeline")}</CardTitle></CardHeader>
         <CardContent>
           <ul className="space-y-1 text-sm">
-            <li>📩 Criado em {new Date(sol.criado_em).toLocaleString("pt-BR")}</li>
-            {sol.aprovado_em && <li>✅ Aprovado em {new Date(sol.aprovado_em).toLocaleString("pt-BR")}</li>}
-            {sol.aplicado_em && <li>✔️ Aplicado em {new Date(sol.aplicado_em).toLocaleString("pt-BR")}</li>}
+            <li>{t("solicitacao_detalhe.criado_em_txt", { data: new Date(sol.criado_em).toLocaleString() })}</li>
+            {sol.aprovado_em && <li>{t("solicitacao_detalhe.aprovado_em_txt", { data: new Date(sol.aprovado_em).toLocaleString() })}</li>}
+            {sol.aplicado_em && <li>{t("solicitacao_detalhe.aplicado_em_txt", { data: new Date(sol.aplicado_em).toLocaleString() })}</li>}
           </ul>
         </CardContent>
       </Card>
 
       {rejeitando && (
         <MotivoModal
-          titulo="Rejeitar solicitação"
-          desc="Explique por que está rejeitando. O solicitante verá o motivo."
-          submitLabel="Rejeitar"
+          titulo={t("solicitacao_detalhe.modal_rejeitar_titulo")}
+          desc={t("solicitacao_detalhe.modal_rejeitar_desc")}
+          submitLabel={t("comum.rejeitar")}
           onClose={() => setRejeitando(false)}
           onSubmit={(motivo) => aplicar.mutate({ decisao: "rejeitar", motivo_rejeicao: motivo })}
           pending={aplicar.isPending}
@@ -375,9 +383,9 @@ function SolicitacaoDetalhePage() {
       )}
       {devolvendo && (
         <MotivoModal
-          titulo="Devolver ao solicitante"
-          desc="Deixe um comentário pedindo ajuste. O solicitante poderá editar e reenviar."
-          submitLabel="Devolver"
+          titulo={t("solicitacao_detalhe.modal_devolver_titulo")}
+          desc={t("solicitacao_detalhe.modal_devolver_desc")}
+          submitLabel={t("comum.devolver")}
           onClose={() => setDevolvendo(false)}
           onSubmit={(comentario) => aplicar.mutate({ decisao: "devolver", comentario })}
           pending={aplicar.isPending}
@@ -406,14 +414,16 @@ interface AnaliseEstrutural {
 // - "e"/"em"/"de" no comeco ou fim
 // - Sem qualquer letra minuscula (tudo caixa alta)
 // - Termina com pontuacao
+// Retorna chave i18n (resolvida com t() na renderização) pra funcionar
+// dentro de qualquer idioma. Chaves em solicitacao_detalhe.erro_*.
 function analisarOrtografia(nome: string): string | null {
-  const t = nome.trim();
-  if (!t) return null;
-  if (/\s{2,}/.test(t)) return "Espaco duplo — remova espacos extras";
-  if (/[.,;:!?]$/.test(t)) return "Termina com pontuacao — remova";
-  if (/^(e|em|de|da|do|a|o|com)\s/i.test(t)) return `Comeca com "${t.split(" ")[0]}" — verifique se e intencional`;
-  if (t.length > 3 && t === t.toUpperCase()) return "Todo em maiuscula — considere caixa mista";
-  if (/^[a-z]/.test(t)) return "Comeca com minuscula — capitalize a primeira letra";
+  const s = nome.trim();
+  if (!s) return null;
+  if (/\s{2,}/.test(s)) return "solicitacao_detalhe.erro_espaco_duplo";
+  if (/[.,;:!?]$/.test(s)) return "solicitacao_detalhe.erro_pontuacao";
+  if (/^(e|em|de|da|do|a|o|com)\s/i.test(s)) return "solicitacao_detalhe.erro_minuscula_inicio";
+  if (s.length > 3 && s === s.toUpperCase()) return "solicitacao_detalhe.erro_caixa_alta";
+  if (/^[a-z]/.test(s)) return "solicitacao_detalhe.erro_minuscula_inicio";
   return null;
 }
 
@@ -571,6 +581,7 @@ function AlteracaoDeDataDetalheCard({
     propagar_seguintes?: boolean;
   };
 }) {
+  const { t } = useT();
   const { data: linha } = useQuery({
     queryKey: ["calendario-linha-alvo", sol.tenant_id, payload.chave_natural],
     queryFn: async () => {
@@ -599,10 +610,10 @@ function AlteracaoDeDataDetalheCard({
     (payload.nova_data < inicio || payload.nova_data > fim);
 
   const titulos: Record<string, string> = {
-    alterar_data_live: "Alteração de data de live",
-    alterar_data_termino: "Alteração de término da disciplina",
-    alterar_data_correcao: "Alteração de data de correção",
-    alterar_data_inicio: "Alteração de início da disciplina",
+    alterar_data_live: t("solicitacao_detalhe.titulo_live"),
+    alterar_data_termino: t("solicitacao_detalhe.titulo_termino"),
+    alterar_data_correcao: t("solicitacao_detalhe.titulo_correcao"),
+    alterar_data_inicio: t("solicitacao_detalhe.titulo_inicio"),
   };
 
   return (
@@ -614,26 +625,26 @@ function AlteracaoDeDataDetalheCard({
         <div className="rounded-md border bg-muted/30 p-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono">{codigo}</span>
-            <span className="text-muted-foreground">Ano {sol.ano ?? "—"}</span>
+            <span className="text-muted-foreground">{t("calendario.ano")} {sol.ano ?? "—"}</span>
           </div>
           <div className="mt-1 text-sm font-medium">{disciplina}</div>
           <div className="text-xs text-muted-foreground">{curso}</div>
           {inicio && fim && (
             <div className="mt-2 text-xs text-muted-foreground">
-              Período da disciplina: {inicio} a {fim}.
+              {t("solicitacao_nova.periodo_disciplina", { inicio, fim })}
             </div>
           )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Campo</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.campo")}</div>
             <div className="mt-0.5 text-sm">{payload.campo ?? "—"}</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Alteração</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.alteracao")}</div>
             <div className="mt-0.5 text-sm">
-              <span className="text-muted-foreground line-through">{valorAtual ?? "(sem data)"}</span>
+              <span className="text-muted-foreground line-through">{valorAtual ?? t("solicitacao_detalhe.sem_data")}</span>
               <span className="mx-2">→</span>
               <span className="font-medium">{payload.nova_data ?? "—"}</span>
             </div>
@@ -644,29 +655,26 @@ function AlteracaoDeDataDetalheCard({
           <div className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <span className="font-medium">Fora do período da disciplina.</span> A aprovação vai falhar
-              — precisa devolver ou abrir também alteração de término.
+              <span className="font-medium">{t("solicitacao_detalhe.fora_do_periodo")}</span> {t("solicitacao_detalhe.fora_do_periodo_aviso")}
             </div>
           </div>
         )}
         {!foraDeJanela && sol.tipo === "alterar_data_live" && payload.nova_data && (
           <div className="flex items-start gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300">
             <Check className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>Nova data cai dentro do período da disciplina.</div>
+            <div>{t("solicitacao_detalhe.dentro_do_periodo")}</div>
           </div>
         )}
         {sol.tipo === "alterar_data_termino" && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
-            Ao aplicar, a data de entrega da atividade avaliativa (QUESTIONÁRIO SEMANA 4) é atualizada
-            junto — regra da área.
+            {t("solicitacao_detalhe.aviso_atividade_ao_aplicar")}
           </div>
         )}
         {sol.tipo === "alterar_data_inicio" && payload.propagar_seguintes && (
           <div className="flex items-start gap-2 rounded-md border border-orange-500/40 bg-orange-500/10 p-3 text-xs text-orange-800 dark:text-orange-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <span className="font-medium">Propagar seguintes = SIM.</span> Todas as disciplinas do
-              mesmo curso/ano posteriores a esta serão reprojetadas.
+              <span className="font-medium">{t("solicitacao_detalhe.propagar_sim")}</span> {t("solicitacao_detalhe.propagar_sim_aviso")}
             </div>
           </div>
         )}
@@ -674,7 +682,7 @@ function AlteracaoDeDataDetalheCard({
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Motivo</div>
           <div className="mt-1 rounded-md border bg-background p-3 text-sm">
-            {payload.motivo?.trim() ? payload.motivo : <span className="text-muted-foreground">(sem motivo — pedido inválido, devolva)</span>}
+            {payload.motivo?.trim() ? payload.motivo : <span className="text-muted-foreground">{t("solicitacao_detalhe.sem_motivo")}</span>}
           </div>
         </div>
       </CardContent>
