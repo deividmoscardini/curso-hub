@@ -10,6 +10,7 @@ import { ShieldCheck, Loader2, ExternalLink } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PAPEIS_APROVACAO, labelPapel } from "@/lib/papel-labels";
 import type { PapelTenant } from "@/contexts/tenant";
+import { useT } from "@/contexts/i18n";
 
 // Fase 6.M3 — Painel lateral pra editar rapidamente um usuario aprovado
 // sem sair da lista. Mostra dados, papel atual, e permite: mudar papel,
@@ -27,6 +28,7 @@ interface LogRow { id: string; acao: string; motivo: string | null; criado_em: s
 
 export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose: () => void }) {
   const qc = useQueryClient();
+  const { t } = useT();
 
   const { data: perfil } = useQuery({
     queryKey: ["drawer-usuario", perfilId],
@@ -79,10 +81,10 @@ export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose
     },
     onSuccess: (_, escolha) => {
       const label = PAPEIS_APROVACAO.find((p) => p.valor === escolha)?.label ?? escolha;
-      toast.success(`Papel atualizado para ${label}`);
+      toast.success(t("admin_usuarios.papel_atualizado", { papel: label }));
       qc.invalidateQueries();
     },
-    onError: (err: Error) => toast.error("Falha ao atualizar", { description: err.message }),
+    onError: (err: Error) => toast.error(t("admin_usuarios.atualizar_falha"), { description: err.message }),
   });
 
   const [selecao, setSelecao] = useState<PapelTenant | "admin_global" | "">("");
@@ -90,12 +92,12 @@ export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose
   if (!perfil) {
     return (
       <Sheet open onOpenChange={() => onClose()}>
-        <SheetContent side="right"><div className="pt-6 text-sm text-muted-foreground">Carregando…</div></SheetContent>
+        <SheetContent side="right"><div className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</div></SheetContent>
       </Sheet>
     );
   }
 
-  const papelAtualLabel = perfil.admin_global ? "Admin +A" : (papel ? labelPapel(papel) : "sem papel");
+  const papelAtualLabel = perfil.admin_global ? t("admin_usuarios.papel_admin") : (papel ? labelPapel(papel) : t("admin_usuarios.sem_papel"));
 
   return (
     <Sheet open onOpenChange={() => onClose()}>
@@ -108,7 +110,7 @@ export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose
         <div className="mt-6 space-y-4">
           <div className="rounded-md border bg-muted/20 p-3 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Papel atual</span>
+              <span className="text-muted-foreground">{t("admin_usuarios.papel_atual")}</span>
               {perfil.admin_global ? (
                 <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3 w-3" />{papelAtualLabel}</Badge>
               ) : (
@@ -116,16 +118,16 @@ export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose
               )}
             </div>
             <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Aprovado em</span>
-              <span>{perfil.aprovado_em ? new Date(perfil.aprovado_em).toLocaleDateString("pt-BR") : "—"}</span>
+              <span>{t("admin_usuarios.aprovado_em_lbl")}</span>
+              <span>{perfil.aprovado_em ? new Date(perfil.aprovado_em).toLocaleDateString() : "—"}</span>
             </div>
           </div>
 
           <div className="rounded-md border p-3">
-            <div className="mb-2 text-sm font-medium">Mudar papel</div>
+            <div className="mb-2 text-sm font-medium">{t("admin_usuarios.mudar_papel")}</div>
             <div className="flex gap-2">
               <Select value={selecao || undefined} onValueChange={(v) => setSelecao(v as PapelTenant | "admin_global")}>
-                <SelectTrigger className="flex-1"><SelectValue placeholder="Escolher novo papel" /></SelectTrigger>
+                <SelectTrigger className="flex-1"><SelectValue placeholder={t("admin_usuarios.escolher_novo_papel")} /></SelectTrigger>
                 <SelectContent>
                   {PAPEIS_APROVACAO.map((p) => (
                     <SelectItem key={p.valor} value={p.valor}>{p.label}</SelectItem>
@@ -137,23 +139,23 @@ export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose
                 disabled={!selecao || mudarPapel.isPending}
                 onClick={() => selecao && mudarPapel.mutate(selecao)}
               >
-                {mudarPapel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Aplicar"}
+                {mudarPapel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("admin_usuarios.aplicar")}
               </Button>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Papel se aplica a todos os produtos automaticamente.
+              {t("admin_usuarios.papel_aplica_a_todos")}
             </p>
           </div>
 
           <div className="rounded-md border p-3">
-            <div className="mb-2 text-sm font-medium">Histórico</div>
+            <div className="mb-2 text-sm font-medium">{t("admin_usuarios.historico_titulo")}</div>
             {(logs?.length ?? 0) === 0 ? (
-              <p className="text-xs text-muted-foreground">Nenhuma ação registrada.</p>
+              <p className="text-xs text-muted-foreground">{t("admin_usuarios.nenhuma_acao")}</p>
             ) : (
               <ul className="space-y-1.5 text-xs">
                 {logs?.map((l) => (
                   <li key={l.id} className="flex items-start gap-2">
-                    <span className="text-muted-foreground">{new Date(l.criado_em).toLocaleDateString("pt-BR")}</span>
+                    <span className="text-muted-foreground">{new Date(l.criado_em).toLocaleDateString()}</span>
                     <span className="font-mono">{l.acao}</span>
                     {l.motivo && <span className="text-muted-foreground italic">— {l.motivo}</span>}
                   </li>

@@ -307,31 +307,35 @@ function PendentesBadge() {
 // Tela mostrada quando o user esta pendente/rejeitado — bloqueia todas as
 // rotas autenticadas. Sair volta pra /auth.
 function StatusBloqueio({ perfil, onSignOut }: { perfil: Perfil; onSignOut: () => void }) {
+  const { t } = useT();
   const isPendente = perfil.status === "pendente";
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+      <div className="absolute right-4 top-4">
+        <SeletorIdioma />
+      </div>
       <Card className="max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
             {isPendente ? <Clock className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
           </div>
           <CardTitle>
-            {isPendente ? "Aguardando aprovação" : "Cadastro rejeitado"}
+            {isPendente ? t("auth.status_titulo_pendente") : t("auth.status_titulo_rejeitado")}
           </CardTitle>
           <CardDescription>
             {isPendente
-              ? "Sua conta foi criada e aguarda a aprovação de um administrador. Você receberá acesso assim que for autorizado."
+              ? t("auth.status_desc_pendente")
               : perfil.motivo_rejeicao
-                ? `Motivo: ${perfil.motivo_rejeicao}`
-                : "Entre em contato com o administrador da plataforma."}
+                ? t("auth.conta_rejeitada_motivo", { motivo: perfil.motivo_rejeicao })
+                : t("auth.status_desc_rejeitado_fallback")}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-center">
           <div className="text-xs text-muted-foreground">
-            Você está logado como <span className="font-medium">{perfil.email}</span>.
+            {t("auth.logado_como", { email: perfil.email })}
           </div>
           <Button variant="outline" size="sm" onClick={onSignOut}>
-            Sair
+            {t("comum.sair")}
           </Button>
         </CardContent>
       </Card>

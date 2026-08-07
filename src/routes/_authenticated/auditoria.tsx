@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollText } from "lucide-react";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/auditoria")({
   head: () => ({ meta: [{ title: "Auditoria — Calendário +A" }] }),
@@ -30,6 +31,7 @@ interface LogRow {
 
 function AuditoriaPage() {
   const { perfil } = useTenant();
+  const { t } = useT();
   const [filtroAcao, setFiltroAcao] = useState("");
   const [filtroEntidade, setFiltroEntidade] = useState<string>("");
 
@@ -72,7 +74,7 @@ function AuditoriaPage() {
   if (!perfil?.admin_global) {
     return (
       <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-        Só admin global vê o log completo. Owner de produto pode ver o do seu tenant em breve.
+        {t("auditoria.so_admin_desc")}
       </CardContent></Card>
     );
   }
@@ -82,34 +84,32 @@ function AuditoriaPage() {
       <div className="flex items-center gap-3">
         <ScrollText className="h-6 w-6 text-muted-foreground" />
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Auditoria</h1>
-          <p className="text-sm text-muted-foreground">
-            Histórico completo de todas as ações registradas na plataforma.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("auditoria.titulo")}</h1>
+          <p className="text-sm text-muted-foreground">{t("auditoria.subtitulo_audit")}</p>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <select value={filtroAcao} onChange={(e) => setFiltroAcao(e.target.value)}
           className="rounded-md border bg-background px-3 py-1.5 text-sm">
-          <option value="">Todas as ações ({(logs ?? []).length})</option>
+          <option value="">{t("auditoria.todas_acoes", { n: (logs ?? []).length })}</option>
           {acoesDisponiveis.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
         <select value={filtroEntidade} onChange={(e) => setFiltroEntidade(e.target.value)}
           className="rounded-md border bg-background px-3 py-1.5 text-sm">
-          <option value="">Todas as entidades</option>
+          <option value="">{t("auditoria.todas_entidades")}</option>
           {entidadesDisponiveis.map((e) => <option key={e} value={e}>{e}</option>)}
         </select>
         <div className="ml-auto text-xs text-muted-foreground">
-          {filtrados.length.toLocaleString("pt-BR")} registros
+          {t("auditoria.contagem_registros", { n: filtrados.length.toLocaleString() })}
         </div>
       </div>
 
       {isLoading ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>
       ) : filtrados.length === 0 ? (
         <Card><CardContent className="pt-6 text-center text-sm text-muted-foreground">
-          Nenhum registro com esses filtros.
+          {t("auditoria.sem_filtros")}
         </CardContent></Card>
       ) : (
         <Card>
@@ -118,25 +118,25 @@ function AuditoriaPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="p-2">Data/hora</th>
-                    <th className="p-2">Ator</th>
-                    <th className="p-2">Ação</th>
-                    <th className="p-2">Entidade</th>
-                    <th className="p-2">Produto</th>
-                    <th className="p-2">Motivo/Detalhe</th>
+                    <th className="p-2">{t("auditoria.coluna_datahora")}</th>
+                    <th className="p-2">{t("auditoria.coluna_ator")}</th>
+                    <th className="p-2">{t("auditoria.coluna_acao")}</th>
+                    <th className="p-2">{t("auditoria.coluna_entidade")}</th>
+                    <th className="p-2">{t("admin_solicitacoes.coluna_produto")}</th>
+                    <th className="p-2">{t("auditoria.coluna_motivo_detalhe")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtrados.map((l) => (
                     <tr key={l.id} className="border-t hover:bg-muted/20">
-                      <td className="p-2 text-xs">{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
+                      <td className="p-2 text-xs">{new Date(l.criado_em).toLocaleString()}</td>
                       <td className="p-2 text-xs">
                         {l.ator ? (
                           <>
                             <div className="font-medium">{l.ator.nome}</div>
                             <div className="text-[10px] text-muted-foreground">{l.ator.email}</div>
                           </>
-                        ) : <span className="text-muted-foreground">sistema</span>}
+                        ) : <span className="text-muted-foreground">{t("auditoria.sistema")}</span>}
                       </td>
                       <td className="p-2">
                         <Badge variant="outline" className="font-mono text-[10px]">{l.acao}</Badge>
@@ -151,7 +151,7 @@ function AuditoriaPage() {
                           <div className="truncate">{l.motivo}</div>
                         ) : l.depois ? (
                           <details>
-                            <summary className="cursor-pointer text-muted-foreground">detalhes</summary>
+                            <summary className="cursor-pointer text-muted-foreground">{t("auditoria.detalhes")}</summary>
                             <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted/40 p-1 text-[10px]">{JSON.stringify(l.depois, null, 2)}</pre>
                           </details>
                         ) : "—"}

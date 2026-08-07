@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios/$id")({
   head: () => ({ meta: [{ title: "Detalhe do usuário — Admin" }] }),
@@ -29,6 +30,7 @@ interface LogRow {
 function DetalheUsuarioPage() {
   const { id } = Route.useParams();
   const { perfil: atual } = useTenant();
+  const { t } = useT();
 
   const { data: perfil } = useQuery({
     queryKey: ["admin-usuario", id],
@@ -71,17 +73,17 @@ function DetalheUsuarioPage() {
   });
 
   if (!atual?.admin_global) {
-    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">Só admin global.</CardContent></Card>;
+    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("admin_solicitacoes.so_admin")}</CardContent></Card>;
   }
   if (!perfil) {
-    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>;
+    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="sm">
-          <Link to="/admin/usuarios"><ArrowLeft className="mr-1 h-4 w-4" />Voltar</Link>
+          <Link to="/admin/usuarios"><ArrowLeft className="mr-1 h-4 w-4" />{t("comum.voltar")}</Link>
         </Button>
       </div>
 
@@ -92,28 +94,28 @@ function DetalheUsuarioPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-base">Situação</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("admin_usuarios.situacao")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <Linha label="Status"><StatusBadge status={perfil.status} /></Linha>
-            <Linha label="Admin global">{perfil.admin_global ? "Sim" : "Não"}</Linha>
-            <Linha label="Cadastrado em">{new Date(perfil.criado_em).toLocaleString("pt-BR")}</Linha>
+            <Linha label={t("admin_usuarios.coluna_status")}><StatusBadge status={perfil.status} /></Linha>
+            <Linha label={t("admin_usuarios.admin_global_lbl")}>{perfil.admin_global ? t("comum.sim") : t("comum.nao")}</Linha>
+            <Linha label={t("admin_usuarios.cadastrado_em")}>{new Date(perfil.criado_em).toLocaleString()}</Linha>
             {perfil.aprovado_em && (
-              <Linha label="Aprovado em">{new Date(perfil.aprovado_em).toLocaleString("pt-BR")}</Linha>
+              <Linha label={t("admin_usuarios.aprovado_em_lbl")}>{new Date(perfil.aprovado_em).toLocaleString()}</Linha>
             )}
             {perfil.motivo_rejeicao && (
-              <Linha label="Motivo rejeição"><span className="text-rose-600">{perfil.motivo_rejeicao}</span></Linha>
+              <Linha label={t("admin_usuarios.motivo_rejeicao_col")}><span className="text-rose-600">{perfil.motivo_rejeicao}</span></Linha>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Produtos (membros)</CardTitle>
-            <CardDescription>Produtos em que o usuário é membro e o papel de cada um.</CardDescription>
+            <CardTitle className="text-base">{t("admin_usuarios.produtos_membros")}</CardTitle>
+            <CardDescription>{t("admin_usuarios.produtos_membros_desc")}</CardDescription>
           </CardHeader>
           <CardContent>
             {(membros?.length ?? 0) === 0 ? (
-              <p className="text-sm text-muted-foreground">Não é membro de nenhum produto ainda.</p>
+              <p className="text-sm text-muted-foreground">{t("admin_usuarios.nao_e_membro")}</p>
             ) : (
               <ul className="space-y-1 text-sm">
                 {membros?.map((m) => (
@@ -130,27 +132,27 @@ function DetalheUsuarioPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Histórico</CardTitle>
-          <CardDescription>Ações registradas no log de auditoria (últimos 50).</CardDescription>
+          <CardTitle className="text-base">{t("admin_usuarios.historico_titulo")}</CardTitle>
+          <CardDescription>{t("admin_usuarios.historico_desc")}</CardDescription>
         </CardHeader>
         <CardContent>
           {(logs?.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma ação registrada.</p>
+            <p className="text-sm text-muted-foreground">{t("admin_usuarios.nenhuma_acao")}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="p-2">Data</th>
-                    <th className="p-2">Ação</th>
-                    <th className="p-2">Entidade</th>
-                    <th className="p-2">Motivo/Nota</th>
+                    <th className="p-2">{t("admin_usuarios.coluna_data")}</th>
+                    <th className="p-2">{t("auditoria.coluna_acao")}</th>
+                    <th className="p-2">{t("auditoria.coluna_entidade")}</th>
+                    <th className="p-2">{t("admin_usuarios.coluna_motivo_nota")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {logs?.map((l) => (
                     <tr key={l.id} className="border-t">
-                      <td className="p-2 text-xs">{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
+                      <td className="p-2 text-xs">{new Date(l.criado_em).toLocaleString()}</td>
                       <td className="p-2 font-mono text-xs">{l.acao}</td>
                       <td className="p-2 text-xs text-muted-foreground">{l.entidade ?? "—"}</td>
                       <td className="p-2 text-xs text-muted-foreground">{l.motivo ?? "—"}</td>
@@ -175,10 +177,11 @@ function Linha({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 function StatusBadge({ status }: { status: "pendente" | "aprovado" | "rejeitado" }) {
+  const { t } = useT();
   const map = {
-    pendente: { label: "Pendente", cls: "bg-amber-500/10 text-amber-700 dark:text-amber-400" },
-    aprovado: { label: "Aprovado", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" },
-    rejeitado: { label: "Rejeitado", cls: "bg-rose-500/10 text-rose-700 dark:text-rose-400" },
+    pendente: { label: t("admin_usuarios.status_pendente_lbl"), cls: "bg-amber-500/10 text-amber-700 dark:text-amber-400" },
+    aprovado: { label: t("admin_usuarios.status_aprovado_lbl"), cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" },
+    rejeitado: { label: t("admin_usuarios.status_rejeitado_lbl"), cls: "bg-rose-500/10 text-rose-700 dark:text-rose-400" },
   }[status];
   return <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${map.cls}`}>{map.label}</span>;
 }

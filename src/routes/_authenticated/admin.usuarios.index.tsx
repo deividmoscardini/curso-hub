@@ -14,6 +14,7 @@ import { AprovarSplitButton } from "@/components/AprovarSplitButton";
 import { UsuarioDrawer } from "@/components/UsuarioDrawer";
 import { labelPapel } from "@/lib/papel-labels";
 import type { PapelTenant } from "@/contexts/tenant";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios/")({
   head: () => ({ meta: [{ title: "Usuários — Admin" }] }),
@@ -38,6 +39,7 @@ interface MembroLinha {
 
 function AdminUsuariosPage() {
   const { perfil: atual } = useTenant();
+  const { t } = useT();
   const [rejeitando, setRejeitando] = useState<Perfil | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
 
@@ -68,7 +70,7 @@ function AdminUsuariosPage() {
   });
 
   if (!atual?.admin_global) {
-    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">Só admin global tem acesso.</CardContent></Card>;
+    return <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.sem_permissao_admin")}</CardContent></Card>;
   }
 
   const total = usuarios?.length ?? 0;
@@ -89,32 +91,30 @@ function AdminUsuariosPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Usuários</h1>
-        <p className="text-sm text-muted-foreground">
-          Todo aprovado tem acesso a todos os produtos automaticamente. Pendentes ficam no topo — aprove ou rejeite direto na linha.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("admin_usuarios.titulo")}</h1>
+        <p className="text-sm text-muted-foreground">{t("admin_usuarios.subtitulo")}</p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
-        <KpiCard label="Total" valor={total} icone={<Users className="h-4 w-4" />} />
-        <KpiCard label="Pendentes" valor={pendentes} icone={<Clock className="h-4 w-4" />} tom={pendentes > 0 ? "warn" : "default"} />
-        <KpiCard label="Aprovados" valor={aprovados} icone={<CheckCircle2 className="h-4 w-4" />} tom="ok" />
-        <KpiCard label="Rejeitados" valor={rejeitados} icone={<XCircle className="h-4 w-4" />} tom={rejeitados > 0 ? "bad" : "default"} />
+        <KpiCard label={t("admin_usuarios.total")} valor={total} icone={<Users className="h-4 w-4" />} />
+        <KpiCard label={t("admin_usuarios.pendentes")} valor={pendentes} icone={<Clock className="h-4 w-4" />} tom={pendentes > 0 ? "warn" : "default"} />
+        <KpiCard label={t("admin_usuarios.aprovados")} valor={aprovados} icone={<CheckCircle2 className="h-4 w-4" />} tom="ok" />
+        <KpiCard label={t("admin_usuarios.rejeitados")} valor={rejeitados} icone={<XCircle className="h-4 w-4" />} tom={rejeitados > 0 ? "bad" : "default"} />
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Todos os usuários</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("admin_usuarios.todos_usuarios")}</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="p-2">Nome</th>
-                  <th className="p-2">Email</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Perfil</th>
-                  <th className="p-2">Cadastrado</th>
-                  <th className="p-2 text-right">Ações</th>
+                  <th className="p-2">{t("auth.nome")}</th>
+                  <th className="p-2">{t("admin_usuarios.coluna_email")}</th>
+                  <th className="p-2">{t("admin_usuarios.coluna_status")}</th>
+                  <th className="p-2">{t("admin_usuarios.coluna_perfil")}</th>
+                  <th className="p-2">{t("admin_usuarios.coluna_cadastrado")}</th>
+                  <th className="p-2 text-right">{t("admin_usuarios.coluna_acoes")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,19 +139,19 @@ function AdminUsuariosPage() {
                         )}
                       </td>
                       <td className="p-2 text-xs text-muted-foreground">
-                        {new Date(u.criado_em).toLocaleDateString("pt-BR")}
+                        {new Date(u.criado_em).toLocaleDateString()}
                       </td>
                       <td className="p-2" onClick={(e) => e.stopPropagation()}>
                         {isPendente ? (
                           <div className="flex justify-end gap-2">
                             <AprovarSplitButton perfilId={u.id} nome={u.nome} />
                             <Button size="sm" variant="outline" onClick={() => setRejeitando(u)}>
-                              <X className="mr-1 h-4 w-4" />Rejeitar
+                              <X className="mr-1 h-4 w-4" />{t("admin_usuarios.rejeitar")}
                             </Button>
                           </div>
                         ) : (
                           <div className="text-right text-xs text-muted-foreground">
-                            {u.status === "aprovado" ? "clique na linha" : (u.motivo_rejeicao ?? "—")}
+                            {u.status === "aprovado" ? t("admin_usuarios.clique_linha") : (u.motivo_rejeicao ?? "—")}
                           </div>
                         )}
                       </td>
@@ -184,35 +184,38 @@ function KpiCard({ label, valor, icone, tom = "default" }: { label: string; valo
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-semibold">{valor.toLocaleString("pt-BR")}</div>
+        <div className="text-2xl font-semibold">{valor.toLocaleString()}</div>
       </CardContent>
     </Card>
   );
 }
 
 function StatusBadge({ status }: { status: "pendente" | "aprovado" | "rejeitado" }) {
+  const { t } = useT();
   const map = {
-    pendente: { label: "Pendente", cls: "bg-amber-500/10 text-amber-700 dark:text-amber-400" },
-    aprovado: { label: "Aprovado", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" },
-    rejeitado: { label: "Rejeitado", cls: "bg-rose-500/10 text-rose-700 dark:text-rose-400" },
+    pendente: { label: t("admin_usuarios.status_pendente_lbl"), cls: "bg-amber-500/10 text-amber-700 dark:text-amber-400" },
+    aprovado: { label: t("admin_usuarios.status_aprovado_lbl"), cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" },
+    rejeitado: { label: t("admin_usuarios.status_rejeitado_lbl"), cls: "bg-rose-500/10 text-rose-700 dark:text-rose-400" },
   }[status];
   return <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${map.cls}`}>{map.label}</span>;
 }
 
 function PerfilChip({ papel, adminGlobal }: { papel: PapelTenant | null; adminGlobal: boolean }) {
+  const { t } = useT();
   if (adminGlobal) {
     return (
       <Badge variant="secondary" className="gap-1">
-        <ShieldCheck className="h-3 w-3" />Admin +A
+        <ShieldCheck className="h-3 w-3" />{t("admin_usuarios.papel_admin")}
       </Badge>
     );
   }
-  if (!papel) return <span className="text-muted-foreground">sem perfil</span>;
+  if (!papel) return <span className="text-muted-foreground">{t("admin_usuarios.sem_perfil")}</span>;
   return <Badge variant="outline">{labelPapel(papel)}</Badge>;
 }
 
 function RejeitarModal({ user, onClose }: { user: Perfil; onClose: () => void }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [motivo, setMotivo] = useState("");
 
   const mut = useMutation({
@@ -230,28 +233,28 @@ function RejeitarModal({ user, onClose }: { user: Perfil; onClose: () => void })
       return json;
     },
     onSuccess: () => {
-      toast.success("Usuário rejeitado");
+      toast.success(t("admin_usuarios.usuario_rejeitado"));
       qc.invalidateQueries();
       onClose();
     },
-    onError: (err: Error) => toast.error("Falha ao rejeitar", { description: err.message }),
+    onError: (err: Error) => toast.error(t("admin_usuarios.falha_rejeitar"), { description: err.message }),
   });
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rejeitar {user.nome}</DialogTitle>
-          <DialogDescription>{user.email}. O usuário verá o motivo na tela dele.</DialogDescription>
+          <DialogTitle>{t("admin_usuarios.rejeitar_titulo", { nome: user.nome })}</DialogTitle>
+          <DialogDescription>{t("admin_usuarios.rejeitar_desc", { email: user.email })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Motivo *</label>
-          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={4} placeholder="Explique por que o cadastro foi rejeitado…" />
+          <label className="text-sm font-medium">{t("comum.motivo_obrigatorio")}</label>
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={4} placeholder={t("admin_usuarios.rejeitar_placeholder")} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={mut.isPending}>Cancelar</Button>
+          <Button variant="outline" onClick={onClose} disabled={mut.isPending}>{t("comum.cancelar")}</Button>
           <Button variant="destructive" onClick={() => mut.mutate()} disabled={mut.isPending || !motivo.trim()}>
-            {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Rejeitando…</> : "Rejeitar"}
+            {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("admin_usuarios.rejeitando")}</> : t("comum.rejeitar")}
           </Button>
         </DialogFooter>
       </DialogContent>

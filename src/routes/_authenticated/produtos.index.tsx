@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { FileSpreadsheet, Upload, Loader2 } from "lucide-react";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/produtos/")({
   head: () => ({
@@ -55,6 +56,7 @@ async function contagens(tenantIds: string[]): Promise<ContagemTenant[]> {
 function ProdutosPage() {
   const qc = useQueryClient();
   const { perfil, loading } = useTenant();
+  const { t } = useT();
 
   const { data: tenants } = useQuery({
     queryKey: ["tenants-admin"],
@@ -77,7 +79,7 @@ function ProdutosPage() {
   if (loading) {
     return (
       <div className="max-w-2xl">
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Carregando…</CardContent></Card>
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>
       </div>
     );
   }
@@ -86,10 +88,8 @@ function ProdutosPage() {
       <div className="max-w-2xl">
         <Card>
           <CardHeader>
-            <CardTitle>Sem acesso</CardTitle>
-            <CardDescription>
-              Só admin global pode gerenciar produtos. Peça a um administrador da +A para criar seu tenant.
-            </CardDescription>
+            <CardTitle>{t("comum.sem_acesso")}</CardTitle>
+            <CardDescription>{t("produtos.sem_acesso_desc")}</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -99,34 +99,31 @@ function ProdutosPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Produtos</h1>
-        <p className="text-sm text-muted-foreground">
-          Cada produto = 1 parceiro/calendário (ex.: 411 PUC RIO COLLAB). Importe a planilha inicial
-          para popular cursos, disciplinas e ofertas do produto.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("produtos.titulo")}</h1>
+        <p className="text-sm text-muted-foreground">{t("produtos.subtitulo_produtos")}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {tenants?.map((t) => {
-          const c = cont?.find((x) => x.tenant_id === t.id);
+        {tenants?.map((tenant) => {
+          const c = cont?.find((x) => x.tenant_id === tenant.id);
           return (
-            <Card key={t.id}>
+            <Card key={tenant.id}>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between text-lg">
-                  <span>{t.nome}</span>
-                  <Badge variant="outline" className="text-[10px]">{t.brand_slug}</Badge>
+                  <span>{tenant.nome}</span>
+                  <Badge variant="outline" className="text-[10px]">{tenant.brand_slug}</Badge>
                 </CardTitle>
-                {t.descricao && (
-                  <CardDescription className="line-clamp-2">{t.descricao}</CardDescription>
+                {tenant.descricao && (
+                  <CardDescription className="line-clamp-2">{tenant.descricao}</CardDescription>
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-3 gap-2 text-center">
-                  <Stat label="Cursos" value={c?.cursos ?? 0} />
-                  <Stat label="Disciplinas" value={c?.disciplinas ?? 0} />
-                  <Stat label="Linhas" value={c?.linhas ?? 0} />
+                  <Stat label={t("produtos.stat_cursos")} value={c?.cursos ?? 0} />
+                  <Stat label={t("produtos.stat_disciplinas")} value={c?.disciplinas ?? 0} />
+                  <Stat label={t("produtos.stat_linhas")} value={c?.linhas ?? 0} />
                 </div>
-                <ImportarPlanilha tenantId={t.id} onDone={() => qc.invalidateQueries()} />
+                <ImportarPlanilha tenantId={tenant.id} onDone={() => qc.invalidateQueries()} />
               </CardContent>
             </Card>
           );
@@ -139,7 +136,7 @@ function ProdutosPage() {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border bg-muted/20 p-2">
-      <div className="text-lg font-semibold">{value.toLocaleString("pt-BR")}</div>
+      <div className="text-lg font-semibold">{value.toLocaleString()}</div>
       <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
     </div>
   );
@@ -148,10 +145,11 @@ function Stat({ label, value }: { label: string; value: number }) {
 function ImportarPlanilha({ tenantId, onDone }: { tenantId: string; onDone: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [progresso, setProgresso] = useState<string | null>(null);
+  const { t } = useT();
 
   const mut = useMutation({
     mutationFn: async (file: File) => {
-      setProgresso("Lendo arquivo…");
+      setProgresso(t("produtos.lendo_arquivo"));
       const buf = await file.arrayBuffer();
       // Converte pra base64
       const bytes = new Uint8Array(buf);
@@ -162,7 +160,7 @@ function ImportarPlanilha({ tenantId, onDone }: { tenantId: string; onDone: () =
       }
       const base64 = btoa(bin);
 
-      setProgresso("Enviando…");
+      setProgresso(t("produtos.enviando_arquivo"));
       const { data: session } = await supabase.auth.getSession();
       const token = session.session?.access_token;
       if (!token) throw new Error("Sessão expirada");
@@ -183,14 +181,14 @@ function ImportarPlanilha({ tenantId, onDone }: { tenantId: string; onDone: () =
     },
     onSuccess: (data) => {
       const r = data.resumo;
-      toast.success("Planilha importada", {
-        description: `${r.cursos} cursos · ${r.disciplinas} disciplinas · ${r.calendario_linhas} linhas`,
+      toast.success(t("produtos.planilha_importada"), {
+        description: t("produtos.contagens", { cursos: r.cursos, disciplinas: r.disciplinas, linhas: r.calendario_linhas }),
       });
       setProgresso(null);
       onDone();
     },
     onError: (err: Error) => {
-      toast.error("Falha ao importar", { description: err.message });
+      toast.error(t("produtos.planilha_erro"), { description: err.message });
       setProgresso(null);
     },
   });
@@ -216,14 +214,14 @@ function ImportarPlanilha({ tenantId, onDone }: { tenantId: string; onDone: () =
         onClick={() => inputRef.current?.click()}
       >
         {mut.isPending ? (
-          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{progresso ?? "Importando…"}</>
+          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{progresso ?? t("produtos.importando")}</>
         ) : (
-          <><Upload className="mr-2 h-4 w-4" />Importar planilha (.xlsx)</>
+          <><Upload className="mr-2 h-4 w-4" />{t("produtos.botao_importar")}</>
         )}
       </Button>
       <p className="mt-2 text-xs text-muted-foreground">
         <FileSpreadsheet className="mr-1 inline h-3 w-3" />
-        Rodar 1x com a planilha oficial. Upsert por (produto, chave) — repetir com arquivo atualizado é seguro.
+        {t("produtos.dica_importar")}
       </p>
     </div>
   );

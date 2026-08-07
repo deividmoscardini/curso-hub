@@ -5,6 +5,7 @@ import { useTenant } from "@/contexts/tenant";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Inbox } from "lucide-react";
+import { useT } from "@/contexts/i18n";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/")({
   head: () => ({ meta: [{ title: "Solicitações — Calendário +A" }] }),
@@ -37,6 +38,15 @@ const STATUS_CLS: Record<string, string> = {
 
 function SolicitacoesListaPage() {
   const { tenantId } = useTenant();
+  const { t } = useT();
+  const STATUS_LABEL_LOCAL: Record<string, string> = {
+    pendente: t("solicitacao_detalhe.status_pendente"),
+    em_revisao: t("solicitacao_detalhe.status_pendente"),
+    aprovada: t("solicitacao_detalhe.status_aprovada"),
+    aplicada: t("solicitacao_detalhe.status_aplicada"),
+    rejeitada: t("solicitacao_detalhe.status_rejeitada"),
+    devolvida: t("solicitacao_detalhe.status_devolvida"),
+  };
 
   const { data: solicitacoes } = useQuery({
     queryKey: ["solicitacoes-lista", tenantId],
@@ -57,14 +67,12 @@ function SolicitacoesListaPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Solicitações</h1>
-          <p className="text-sm text-muted-foreground">
-            RLS filtra automaticamente: você vê suas solicitações; aprovadores veem todas do produto.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("solicitacoes_lista.titulo")}</h1>
+          <p className="text-sm text-muted-foreground">{t("solicitacoes_lista.subtitulo")}</p>
         </div>
         <Button asChild>
           <Link to="/solicitacoes/nova">
-            <Plus className="mr-2 h-4 w-4" />Nova solicitação
+            <Plus className="mr-2 h-4 w-4" />{t("solicitacoes_lista.nova")}
           </Link>
         </Button>
       </div>
@@ -72,7 +80,7 @@ function SolicitacoesListaPage() {
       {(solicitacoes?.length ?? 0) === 0 ? (
         <Card><CardContent className="pt-6 text-center text-sm text-muted-foreground">
           <Inbox className="mx-auto mb-2 h-8 w-8 opacity-50" />
-          Nenhuma solicitação ainda. Clique em "Nova solicitação" pra abrir a primeira.
+          {t("solicitacoes_lista.sem_solicitacoes")}
         </CardContent></Card>
       ) : (
         <Card>
@@ -81,31 +89,31 @@ function SolicitacoesListaPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="p-2">Data</th>
-                    <th className="p-2">Solicitante</th>
-                    <th className="p-2">Tipo</th>
-                    <th className="p-2">Aba</th>
-                    <th className="p-2">Ano</th>
-                    <th className="p-2">Status</th>
+                    <th className="p-2">{t("solicitacoes_lista.coluna_criada")}</th>
+                    <th className="p-2">{t("admin_solicitacoes.coluna_solicitante")}</th>
+                    <th className="p-2">{t("solicitacoes_lista.coluna_tipo")}</th>
+                    <th className="p-2">{t("solicitacao_detalhe.campo")}</th>
+                    <th className="p-2">{t("calendario.ano")}</th>
+                    <th className="p-2">{t("solicitacoes_lista.coluna_status")}</th>
                     <th className="p-2"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {solicitacoes?.map((s) => (
                     <tr key={s.id} className="border-t hover:bg-muted/20">
-                      <td className="p-2 text-xs">{new Date(s.criado_em).toLocaleString("pt-BR")}</td>
+                      <td className="p-2 text-xs">{new Date(s.criado_em).toLocaleString()}</td>
                       <td className="p-2 text-xs">{s.solicitante?.nome ?? "—"}</td>
                       <td className="p-2 text-xs capitalize">{s.tipo.replace(/_/g, " ")}</td>
                       <td className="p-2 text-xs">{s.aba ?? "—"}</td>
                       <td className="p-2 text-xs">{s.ano ?? "—"}</td>
                       <td className="p-2">
                         <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_CLS[s.status] ?? ""}`}>
-                          {STATUS_LABEL[s.status] ?? s.status}
+                          {STATUS_LABEL_LOCAL[s.status] ?? s.status}
                         </span>
                       </td>
                       <td className="p-2 text-right">
                         <Button asChild size="sm" variant="ghost">
-                          <Link to="/solicitacoes/$id" params={{ id: s.id }}>Ver</Link>
+                          <Link to="/solicitacoes/$id" params={{ id: s.id }}>{t("admin_solicitacoes.ver")}</Link>
                         </Button>
                       </td>
                     </tr>
