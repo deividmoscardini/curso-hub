@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { GraduationCap } from "lucide-react";
 import { useT } from "@/contexts/i18n";
 import { SeletorIdioma } from "@/components/SeletorIdioma";
 
@@ -80,9 +79,13 @@ function AuthPage() {
       </div>
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <GraduationCap className="h-6 w-6" />
-          </div>
+          {/* Logo +A oficial (skill identidade-mais-a). Fundo da /auth é
+              off white, então usa a versão fundo-claro. */}
+          <img
+            src="/brands/mais-a/logo-fundo-claro.png"
+            alt="+A Educação"
+            className="h-14 w-14"
+          />
           <h1 className="mt-3 text-xl font-semibold">{t("auth.titulo")}</h1>
         </div>
 

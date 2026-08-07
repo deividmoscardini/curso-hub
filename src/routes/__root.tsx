@@ -100,6 +100,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/2bb511c0-927f-4ccf-bf12-b4836ed3be04/id-preview-f18597ff--e62e5829-7fb3-4993-8285-e61214a21426.lovable.app-1785940025719.png" },
     ],
     links: [
+      // Fontes da identidade +A (skill identidade-mais-a): Poppins pra todo o
+      // material, Source Serif 4 pra serifa quando pedir.
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],

@@ -5,17 +5,26 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design system definition.
+ * Design system — Identidade visual +A Educação
  *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
+ * Skill: identidade-mais-a (referências em ~/.claude/skills/identidade-mais-a/)
+ * Fonte: Manual de Identidade Visual +A Educação, versão 1, novembro/2020.
  *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
+ * Paleta institucional (5 cores fixas — não usar nenhuma cor fora dela):
+ *   Cinza chumbo #3D3C3C — cor institucional; texto e superfícies escuras
+ *   Vermelho     #BB243E — vertical EdTech; destaque e ação primária
+ *   Azul (teal)  #2BABB3 — vertical HealthTech; SÓ para preenchimento (não passa
+ *                          contraste pra texto)
+ *   Cinza prata  #B9B7B6 — vertical Publishing; decorativo, não carrega texto
+ *   Off white    #EAE9E8 — background/superfície de apoio
  *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ * Par de trabalho: chumbo sobre off white (AAA, contraste 9.07).
+ * Nunca vermelho sobre chumbo (contraste 1.80).
+ *
+ * Tipografia:
+ *   Poppins (sans, todos os pesos) — todo o material.
+ *   Source Serif 4 (serifa) — quando o material pedir.
+ *   Carregadas via Google Fonts no <head> (src/routes/__root.tsx).
  */
 
 @theme inline {
@@ -26,6 +35,10 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  --font-sans: var(--font-family-sans);
+  --font-serif: var(--font-family-serif);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -62,83 +75,102 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --radius: 0.5rem;
+
+  /* Paleta institucional +A (valores HEX do manual, coluna oficial). */
+  --a-chumbo:   #3D3C3C;
+  --a-vermelho: #BB243E;
+  --a-azul:     #2BABB3;
+  --a-prata:    #B9B7B6;
+  --a-offwhite: #EAE9E8;
+
+  /* Fontes carregadas via <link> no __root.tsx. Fallback nativo garante
+     render mesmo se o Google Fonts falhar. */
+  --font-family-sans: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-family-serif: "Source Serif 4", Georgia, serif;
+
+  /* Superfícies. Off white é o fundo padrão do manual; cards ficam brancos
+     puros pra dar respiro sobre o off white. */
+  --background: #EAE9E8;
+  --foreground: #3D3C3C;
+  --card: #FFFFFF;
+  --card-foreground: #3D3C3C;
+  --popover: #FFFFFF;
+  --popover-foreground: #3D3C3C;
+
+  /* Primary = chumbo (cor institucional). Ações principais em chumbo mantêm
+     o tom sóbrio e passam AAA de contraste. O vermelho fica reservado pra
+     destaque pontual (destructive/badge de alerta). */
+  --primary: #3D3C3C;
+  --primary-foreground: #EAE9E8;
+
+  /* Secondary = cinza prata (decorativo, não carrega texto). */
+  --secondary: #B9B7B6;
+  --secondary-foreground: #3D3C3C;
+
+  /* Muted = tons neutros pra área de apoio (thead, borders suaves). */
+  --muted: #EAE9E8;
+  --muted-foreground: #6B6A6A;
+
+  /* Accent = tom levemente mais escuro que o background pra hover. */
+  --accent: #D6D4D2;
+  --accent-foreground: #3D3C3C;
+
+  /* Destructive = vermelho institucional. */
+  --destructive: #BB243E;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #D6D4D2;
+  --input: #D6D4D2;
+  --ring: #3D3C3C;
+
+  /* Charts: paleta institucional na ordem chumbo → vermelho → azul → prata
+     → off-cream. Se um gráfico precisar de mais de 5 séries, use tons dessas
+     mesmas cores em vez de introduzir cor nova (regra do manual). */
+  --chart-1: #3D3C3C;
+  --chart-2: #BB243E;
+  --chart-3: #2BABB3;
+  --chart-4: #B9B7B6;
+  --chart-5: #EAE9E8;
+
+  /* Sidebar em chumbo (superfície institucional escura), texto em off white. */
+  --sidebar: #3D3C3C;
+  --sidebar-foreground: #EAE9E8;
+  --sidebar-primary: #BB243E;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #4A4949;
+  --sidebar-accent-foreground: #EAE9E8;
+  --sidebar-border: #4A4949;
+  --sidebar-ring: #BB243E;
 }
 
-.dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
-}
+/* Não há dark mode institucional — a marca +A é definida em fundo claro
+   (off white). Se um usuário forçar prefers-color-scheme: dark, o sistema
+   segue no tema institucional (não invertemos). Uma variação "modo Dashboard"
+   escuro pode ser adicionada depois se pedido pelo time. */
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
 
+  html {
+    font-family: var(--font-family-sans);
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-family-sans);
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
+
+  /* Escala tipográfica do manual (Poppins). Aplicada por default aos h1..h6
+     pra manter hierarquia consistente sem exigir classes manuais. */
+  h1 { font-weight: 700; letter-spacing: 0; }
+  h2 { font-weight: 800; letter-spacing: 0; }
+  h3 { font-weight: 800; letter-spacing: -0.03em; }
+  h4, h5, h6 { font-weight: 600; }
 }

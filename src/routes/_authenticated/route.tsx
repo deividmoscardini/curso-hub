@@ -123,12 +123,16 @@ function AuthenticatedLayout() {
           <Sidebar collapsible="icon">
             <SidebarHeader>
               <div className="flex items-center gap-2 px-2 py-1">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <CalendarDays className="h-4 w-4" />
-                </div>
+                {/* Logo +A oficial (skill identidade-mais-a). Sidebar tem
+                    fundo chumbo, então usa a versão fundo-cinza-chumbo. */}
+                <img
+                  src="/brands/mais-a/logo-fundo-cinza-chumbo.png"
+                  alt="+A Educação"
+                  className="h-8 w-8 shrink-0"
+                />
                 <div className="flex min-w-0 flex-col overflow-hidden">
                   <span className="truncate text-sm font-semibold">Calendário +A</span>
-                  <span className="truncate text-xs text-muted-foreground">
+                  <span className="truncate text-xs text-sidebar-foreground/70">
                     {perfil?.email ?? user.email}
                   </span>
                 </div>
@@ -316,8 +320,13 @@ function StatusBloqueio({ perfil, onSignOut }: { perfil: Perfil; onSignOut: () =
       </div>
       <Card className="max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            {isPendente ? <Clock className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
+          <img
+            src="/brands/mais-a/logo-fundo-claro.png"
+            alt="+A Educação"
+            className="mx-auto mb-2 h-12 w-12"
+          />
+          <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center text-muted-foreground">
+            {isPendente ? <Clock className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
           </div>
           <CardTitle>
             {isPendente ? t("auth.status_titulo_pendente") : t("auth.status_titulo_rejeitado")}
