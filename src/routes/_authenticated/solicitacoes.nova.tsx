@@ -13,6 +13,7 @@ import { Loader2, ArrowLeft, AlertTriangle, Plus, Trash2, Download, Upload, File
 import * as XLSX from "xlsx";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TIPOS_CURSO_ORDENADOS, validarChMinima, type TipoCurso } from "@/lib/regras-tipo-curso";
 import { normalizar } from "@/lib/similaridade";
 import { SeletorCodigoTurma, CAMPO, livesDaLinha, type LinhaSelecionada } from "@/components/SeletorCodigoTurma";
@@ -661,6 +662,10 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
 function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
   const { t } = useT();
   const [linha, setLinha] = useState<LinhaSelecionada | null>(null);
+  const [trocarProf, setTrocarProf] = useState(false);
+  const [profNome, setProfNome] = useState("");
+  const [profEmail, setProfEmail] = useState("");
+  const [profNotas, setProfNotas] = useState("");
   const [campo, setCampo] = useState<string>("");
   const [novaData, setNovaData] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -669,8 +674,11 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
   const lives = linha ? livesDaLinha(linha.dados) : [];
   const inicio = linha ? CAMPO.inicio(linha.dados) : null;
   const fim = linha ? CAMPO.fim(linha.dados) : null;
+  const disciplinaNome = linha ? String((linha.dados as Record<string, unknown>)["DISCIPLINA"] ?? "") : "";
+  const dataAtualLive = campo && linha ? String((linha.dados as Record<string, unknown>)[campo] ?? "") : "";
   const foraDeJanela = !!(inicio && fim && novaData && (novaData < inicio || novaData > fim));
-  const podeEnviar = linha && campo && novaData && motivo.trim() && !foraDeJanela;
+  const docenteOk = !trocarProf || profNome.trim().length > 0;
+  const podeEnviar = linha && campo && novaData && motivo.trim() && !foraDeJanela && docenteOk;
 
   return (
     <Card>
@@ -687,6 +695,12 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
             {t("solicitacao_nova.sem_lives")}
           </div>
         )}
+        {linha && (
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_nova.nome_disciplina_lbl")}</div>
+            <div className="mt-0.5 font-medium">{disciplinaNome || "—"}</div>
+          </div>
+        )}
         {linha && lives.length > 0 && (
           <Campo label={t("solicitacao_nova.qual_live")}>
             <Select value={campo} onValueChange={setCampo}>
@@ -701,9 +715,14 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
             </Select>
           </Campo>
         )}
-        <Campo label={t("solicitacao_nova.nova_data")}>
-          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
-        </Campo>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Campo label={t("solicitacao_nova.data_atual")}>
+            <Input type="date" value={dataAtualLive} readOnly disabled />
+          </Campo>
+          <Campo label={t("solicitacao_nova.nova_data")}>
+            <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+          </Campo>
+        </div>
         {inicio && fim && (
           <div className="text-xs text-muted-foreground">{t("solicitacao_nova.periodo_disciplina", { inicio, fim })}</div>
         )}
@@ -716,11 +735,52 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
         <Campo label={t("comum.motivo_obrigatorio")}>
           <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder={t("solicitacao_nova.motivo_placeholder")} />
         </Campo>
+
+        {/* Bloco opcional: se trocar o professor junto, capturar os dados
+            do novo docente. Fica em card destacado pra separar do fluxo
+            principal (alteração de data). */}
+        <div className="rounded-md border p-3">
+          <label className="flex cursor-pointer items-start gap-2">
+            <Checkbox checked={trocarProf} onCheckedChange={(v) => setTrocarProf(!!v)} />
+            <div>
+              <div className="text-sm font-medium">{t("solicitacao_nova.trocar_professor")}</div>
+              <div className="text-xs text-muted-foreground">{t("solicitacao_nova.trocar_professor_desc")}</div>
+            </div>
+          </label>
+          {trocarProf && (
+            <div className="mt-3 space-y-3">
+              <Campo label={t("solicitacao_nova.docente_nome")}>
+                <Input value={profNome} onChange={(e) => setProfNome(e.target.value)} placeholder="Ex.: Ana Costa" />
+              </Campo>
+              <Campo label={t("solicitacao_nova.docente_email")}>
+                <Input type="email" value={profEmail} onChange={(e) => setProfEmail(e.target.value)} placeholder="ana.costa@…" />
+              </Campo>
+              <Campo label={t("solicitacao_nova.docente_notas")}>
+                <Textarea value={profNotas} onChange={(e) => setProfNotas(e.target.value)} rows={3} placeholder={t("solicitacao_nova.docente_notas_ph")} />
+              </Campo>
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-end">
           <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
             tenant_id: tenantId, tipo: "alterar_data_live",
             aba: "disciplinas", ano: linha!.ano,
-            payload: { chave_natural: linha!.chave_natural, campo, nova_data: novaData, motivo: motivo.trim() },
+            payload: {
+              chave_natural: linha!.chave_natural,
+              campo, nova_data: novaData,
+              data_anterior: dataAtualLive || null,
+              disciplina_nome: disciplinaNome || null,
+              motivo: motivo.trim(),
+              ...(trocarProf && {
+                trocar_docente: true,
+                novo_docente: {
+                  nome: profNome.trim(),
+                  email: profEmail.trim() || null,
+                  notas: profNotas.trim() || null,
+                },
+              }),
+            },
           })}>
             {mut.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("comum.enviando")}</> : t("solicitacao_nova.enviar_solicitacao")}
           </Button>
@@ -758,10 +818,14 @@ function FormAlterarDataTermino({ tenantId, onDone }: { tenantId: string; onDone
             </div>
           </div>
         )}
-        <Campo label={t("solicitacao_nova.novo_termino")}>
-          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
-        </Campo>
-        {terminoAtual && <div className="text-xs text-muted-foreground">{t("solicitacao_nova.termino_atual", { data: terminoAtual })}</div>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Campo label={t("solicitacao_nova.data_atual")}>
+            <Input type="date" value={terminoAtual ?? ""} readOnly disabled />
+          </Campo>
+          <Campo label={t("solicitacao_nova.novo_termino")}>
+            <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+          </Campo>
+        </div>
         <Campo label={t("comum.motivo_obrigatorio")}>
           <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
         </Campo>
@@ -799,10 +863,14 @@ function FormAlterarDataCorrecao({ tenantId, onDone }: { tenantId: string; onDon
         <Campo label={t("solicitacao_nova.turma")}>
           <SeletorCodigoTurma tenantId={tenantId} selecionada={linha} onSelecionar={setLinha} />
         </Campo>
-        <Campo label={t("solicitacao_nova.nova_correcao")}>
-          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
-        </Campo>
-        {correcaoAtual && <div className="text-xs text-muted-foreground">{t("solicitacao_nova.correcao_atual", { data: correcaoAtual })}</div>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Campo label={t("solicitacao_nova.data_atual")}>
+            <Input type="date" value={correcaoAtual} readOnly disabled />
+          </Campo>
+          <Campo label={t("solicitacao_nova.nova_correcao")}>
+            <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+          </Campo>
+        </div>
         <Campo label={t("comum.motivo_obrigatorio")}>
           <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
         </Campo>
@@ -847,10 +915,14 @@ function FormAlterarDataInicio({ tenantId, onDone }: { tenantId: string; onDone:
         <Campo label={t("solicitacao_nova.turma")}>
           <SeletorCodigoTurma tenantId={tenantId} selecionada={linha} onSelecionar={setLinha} />
         </Campo>
-        <Campo label={t("solicitacao_nova.novo_inicio")}>
-          <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
-        </Campo>
-        {inicioAtual && <div className="text-xs text-muted-foreground">{t("solicitacao_nova.inicio_atual", { data: inicioAtual })}</div>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Campo label={t("solicitacao_nova.data_atual")}>
+            <Input type="date" value={inicioAtual ?? ""} readOnly disabled />
+          </Campo>
+          <Campo label={t("solicitacao_nova.novo_inicio")}>
+            <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
+          </Campo>
+        </div>
         <div className="flex items-start gap-2 rounded-md border p-3">
           <Checkbox id="propagar" checked={propagar} onCheckedChange={(v) => setPropagar(!!v)} />
           <label htmlFor="propagar" className="text-sm">
@@ -882,10 +954,15 @@ function FormAlterarDataInicio({ tenantId, onDone }: { tenantId: string; onDone:
 }
 
 // ---------------- Reordenar Carrossel ----------------
+// Fase 8.11 — Combobox de curso com busca (substitui o Select shadcn puro,
+// que não filtra) + tabela dinâmica de disciplinas no mesmo padrão do
+// FormNovoCurso, em vez de textarea "uma disciplina por linha".
 function FormReordenar({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
   const { t } = useT();
   const [cursoId, setCursoId] = useState<string>("");
-  const [ordemFinalTxt, setOrdemFinalTxt] = useState("");
+  const [buscaCurso, setBuscaCurso] = useState("");
+  const [comboAberto, setComboAberto] = useState(false);
+  const [disciplinas, setDisciplinas] = useState<DisciplinaLinha[]>([]);
   const mut = useSubmit(onDone, t);
 
   const { data: cursos } = useQuery({
@@ -900,13 +977,57 @@ function FormReordenar({ tenantId, onDone }: { tenantId: string; onDone: (id: st
     queryKey: ["disciplinas-do-curso", cursoId],
     queryFn: async () => {
       if (!cursoId) return [];
-      const { data } = await supabase.from("disciplinas").select("nome, ordem_carrossel, ch, tipo_oferta").eq("curso_id", cursoId).order("ordem_carrossel");
-      return data ?? [];
+      const { data } = await supabase.from("disciplinas")
+        .select("nome, ordem_carrossel, ch, tipo_oferta")
+        .eq("curso_id", cursoId).order("ordem_carrossel");
+      return (data ?? []) as Array<{ nome: string; ordem_carrossel: number; ch: number | null; tipo_oferta: "A" | "C" }>;
     },
     enabled: !!cursoId,
   });
 
-  const ordemFinal = ordemFinalTxt.split("\n").map((s) => s.trim()).filter(Boolean).map((nome, i) => ({ ordem: i + 1, nome, ch: 20, tipo_oferta: "A" as const }));
+  const cursoSelecionado = cursos?.find((c) => c.id === cursoId) ?? null;
+
+  // Filtro do combobox: normaliza + testa em código, nome e a concatenação.
+  const buscaNorm = normalizar(buscaCurso.trim());
+  const cursosFiltrados = (cursos ?? []).filter((c) => {
+    if (!buscaNorm) return true;
+    const blob = normalizar(`${c.codigo} ${c.nome}`);
+    return blob.includes(buscaNorm);
+  }).slice(0, 50);
+
+  function copiarOrdemAtual() {
+    if (!disciplinasAtuais) return;
+    setDisciplinas(disciplinasAtuais.map((d, i) => ({
+      ordem: i + 1,
+      nome: d.nome,
+      ch: d.ch ?? 20,
+      tipo_oferta: d.tipo_oferta ?? "A",
+      tem_pre_requisito: false,
+    })));
+  }
+
+  function adicionarLinha() {
+    setDisciplinas((ds) => [...ds, novaLinhaDisciplina(ds.length + 1, 20)]);
+  }
+  function removerLinha(idx: number) {
+    setDisciplinas((ds) => ds.filter((_, i) => i !== idx).map((d, i) => ({ ...d, ordem: i + 1 })));
+  }
+  function atualizarLinha(idx: number, patch: Partial<DisciplinaLinha>) {
+    setDisciplinas((ds) => ds.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
+  }
+  function setQuantidade(n: number) {
+    setDisciplinas((ds) => {
+      if (n <= 0) return [];
+      if (n === ds.length) return ds;
+      if (n > ds.length) {
+        const extras = Array.from({ length: n - ds.length }, (_, k) => novaLinhaDisciplina(ds.length + k + 1, 20));
+        return [...ds, ...extras];
+      }
+      return ds.slice(0, n).map((d, i) => ({ ...d, ordem: i + 1 }));
+    });
+  }
+
+  const ordemFinal = disciplinas.filter((d) => d.nome.trim().length > 0);
   const podeEnviar = cursoId && ordemFinal.length > 0;
 
   return (
@@ -915,29 +1036,128 @@ function FormReordenar({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         <CardDescription>{t("solicitacao_nova.reordenar_desc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Combobox de curso: input com busca + popover com resultados. */}
         <Campo label={t("solicitacao_nova.curso")}>
-          <Select value={cursoId} onValueChange={(v) => setCursoId(v)}>
-            <SelectTrigger><SelectValue placeholder={t("solicitacao_nova.escolher_curso")} /></SelectTrigger>
-            <SelectContent>
-              {cursos?.map((c) => <SelectItem key={c.id} value={c.id}>{c.codigo} — {c.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Popover open={comboAberto} onOpenChange={setComboAberto}>
+            <PopoverTrigger asChild>
+              <div className="relative">
+                <Input
+                  value={cursoSelecionado ? `${cursoSelecionado.codigo} — ${cursoSelecionado.nome}` : buscaCurso}
+                  onChange={(e) => {
+                    setBuscaCurso(e.target.value);
+                    setCursoId("");
+                    setComboAberto(true);
+                  }}
+                  onFocus={() => setComboAberto(true)}
+                  placeholder={t("solicitacao_nova.buscar_curso")}
+                />
+              </div>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-[--radix-popover-trigger-width] p-0"
+              align="start"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              {cursosFiltrados.length === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground">{t("solicitacao_nova.nenhum_curso")}</div>
+              ) : (
+                <ul className="max-h-72 overflow-y-auto">
+                  {cursosFiltrados.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        className="flex w-full flex-col items-start gap-0.5 border-b px-3 py-2 text-left text-sm hover:bg-accent"
+                        onClick={() => {
+                          setCursoId(c.id);
+                          setBuscaCurso("");
+                          setComboAberto(false);
+                          setDisciplinas([]);
+                        }}
+                      >
+                        <span className="font-mono text-xs">{c.codigo}</span>
+                        <span>{c.nome}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </PopoverContent>
+          </Popover>
         </Campo>
+
         {disciplinasAtuais && disciplinasAtuais.length > 0 && (
           <div className="rounded-md border bg-muted/20 p-3 text-xs">
             <div className="mb-1 font-medium">{t("solicitacao_nova.ordem_atual", { n: disciplinasAtuais.length })}</div>
             <ol className="ml-4 list-decimal space-y-0.5">
               {disciplinasAtuais.map((d, i) => <li key={i}>{d.nome}</li>)}
             </ol>
-            <Button variant="link" size="sm" className="mt-2 h-auto p-0" onClick={() => setOrdemFinalTxt(disciplinasAtuais.map((d) => d.nome).join("\n"))}>
-              {t("solicitacao_nova.copiar_edicao")}
+            <Button variant="link" size="sm" className="mt-2 h-auto p-0" onClick={copiarOrdemAtual}>
+              {t("solicitacao_nova.aplicar_ordem_atual")}
             </Button>
           </div>
         )}
-        <Campo label={t("solicitacao_nova.nova_ordem")}>
-          <Textarea value={ordemFinalTxt} onChange={(e) => setOrdemFinalTxt(e.target.value)} rows={16} placeholder={t("solicitacao_nova.nova_ordem_placeholder")} />
-        </Campo>
-        <div className="text-xs text-muted-foreground">{t("solicitacao_nova.nova_ordem_qtd", { n: ordemFinal.length })}</div>
+
+        {/* Tabela dinâmica no mesmo padrão do FormNovoCurso. */}
+        <div className="rounded-md border">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium">{t("solicitacao_nova.nova_ordem")}</label>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span>{t("solicitacao_nova.quantas")}</span>
+                <Input type="number" min={0} value={disciplinas.length} onChange={(e) => setQuantidade(parseInt(e.target.value, 10) || 0)} className="h-7 w-16" />
+              </div>
+            </div>
+          </div>
+          <div className="max-h-96 overflow-y-auto p-2">
+            {disciplinas.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">{t("solicitacao_nova.sem_disciplinas")}</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground">
+                  <tr>
+                    <th className="w-10 p-1 text-left">#</th>
+                    <th className="p-1 text-left">{t("solicitacao_nova.nome_disciplina")}</th>
+                    <th className="w-20 p-1">{t("solicitacao_nova.ch")}</th>
+                    <th className="w-16 p-1">{t("solicitacao_nova.tipo")}</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {disciplinas.map((d, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="p-1 text-xs text-muted-foreground">{d.ordem}</td>
+                      <td className="p-1"><Input value={d.nome} onChange={(e) => atualizarLinha(i, { nome: e.target.value })} placeholder={t("solicitacao_nova.nome_disciplina")} className="h-8" /></td>
+                      <td className="p-1"><Input type="number" min={0} max={200} value={d.ch} onChange={(e) => atualizarLinha(i, { ch: parseInt(e.target.value, 10) || 0 })} className="h-8" /></td>
+                      <td className="p-1">
+                        <Select value={d.tipo_oferta} onValueChange={(v) => atualizarLinha(i, { tipo_oferta: v as "A" | "C" })}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="A">{t("solicitacao_nova.tipo_a")}</SelectItem>
+                            <SelectItem value="C">{t("solicitacao_nova.tipo_c")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-1">
+                        <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => removerLinha(i)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2">
+            <Button type="button" size="sm" variant="outline" onClick={adicionarLinha}>
+              <Plus className="mr-1 h-3 w-3" />{t("solicitacao_nova.disciplina")}
+            </Button>
+            <div className="text-xs text-muted-foreground">
+              {t("solicitacao_nova.nova_ordem_qtd", { n: ordemFinal.length })}
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-end">
           <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
             tenant_id: tenantId, tipo: "reordenar_carrossel", curso_id: cursoId,
