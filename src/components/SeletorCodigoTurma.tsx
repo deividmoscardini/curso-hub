@@ -2,13 +2,26 @@
 // Compartilhado pelos 4 sub-forms de alteração de data.
 // Digita código ou nome, seleciona → retorna a linha completa
 // (com dados, chave_natural, ano) pro form pré-preencher.
+//
+// Fase 8.13:
+// - Limit da query subiu de 200 → 2000 (base tem ~1.5k linhas por
+//   aba; 200 pegava só o ano mais recente, escondendo turmas ativas
+//   em anos anteriores).
+// - Filtro "só turmas ativas" (default ON): considera ativa se
+//   `DATA FIM` >= hoje OU se a linha ainda não tem data de fim
+//   (campo vazio significa "motor ainda não rodou pra popular").
+// - Cada resultado mostra o período (início → fim) ao lado do
+//   código pra ajudar o usuário a identificar a turma certa quando
+//   existem múltiplas homônimas em anos diferentes.
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Search } from "lucide-react";
 import { normalizar } from "@/lib/similaridade";
+import { useT } from "@/contexts/i18n";
 
 export interface LinhaSelecionada {
   id: string;
@@ -26,6 +39,24 @@ interface Props {
   placeholder?: string;
 }
 
+function dadosDeLinha(linha: LinhaSelecionada) {
+  const d = linha.dados as Record<string, string | null>;
+  return {
+    codigo: String(d["CÓDIGO DA TURMA "] ?? d["CÓDIGO DA TURMA"] ?? "—"),
+    disciplina: String(d["DISCIPLINA"] ?? ""),
+    curso: String(d["CURSO"] ?? ""),
+    inicio: (d["DATA  INÍCIO"] ?? d["DATA INÍCIO"] ?? null) as string | null,
+    fim: (d["DATA FIM "] ?? d["DATA FIM"] ?? null) as string | null,
+  };
+}
+
+// Ativa = tem `fim` no futuro OU `fim` ainda não preenchido (motor não
+// rodou). Turma com fim no passado = concluída, some do filtro default.
+function ehAtiva(fim: string | null, hojeISO: string): boolean {
+  if (!fim || !fim.trim()) return true;
+  return fim >= hojeISO;
+}
+
 export function SeletorCodigoTurma({
   tenantId,
   aba = "disciplinas",
@@ -33,11 +64,14 @@ export function SeletorCodigoTurma({
   onSelecionar,
   placeholder = "Digite código da turma ou nome da disciplina…",
 }: Props) {
+  const { t } = useT();
   const [query, setQuery] = useState("");
   const [aberto, setAberto] = useState(false);
+  const [soAtivas, setSoAtivas] = useState(true);
   const [candidatos, setCandidatos] = useState<LinhaSelecionada[]>([]);
   const [carregando, setCarregando] = useState(false);
 
+  const hojeISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const queryNorm = useMemo(() => normalizar(query.trim()), [query]);
 
   useEffect(() => {
@@ -47,31 +81,41 @@ export function SeletorCodigoTurma({
     }
     let cancelado = false;
     setCarregando(true);
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
+      // Traz todas as linhas da aba (base típica: ~1.5k por aba, cabe).
+      // Filtro por texto acontece client-side sobre código/disciplina/curso.
       const { data } = await supabase
         .from("calendario_linhas")
         .select("id, chave_natural, ano, ordem, dados")
         .eq("tenant_id", tenantId)
         .eq("aba", aba)
         .order("ano", { ascending: false })
-        .limit(200);
+        .limit(2000);
       if (cancelado) return;
-      const linhas = ((data ?? []) as LinhaSelecionada[]).filter((linha) => {
-        const dados = linha.dados as Record<string, string | null>;
-        const codigo = String(dados["CÓDIGO DA TURMA "] ?? dados["CÓDIGO DA TURMA"] ?? "");
-        const disciplina = String(dados["DISCIPLINA"] ?? "");
-        const curso = String(dados["CURSO"] ?? "");
+
+      const filtradas = ((data ?? []) as LinhaSelecionada[]).filter((linha) => {
+        const { codigo, disciplina, curso, fim } = dadosDeLinha(linha);
+        if (soAtivas && !ehAtiva(fim, hojeISO)) return false;
         const blob = normalizar(`${codigo} ${disciplina} ${curso}`);
         return blob.includes(queryNorm);
-      }).slice(0, 20);
-      setCandidatos(linhas);
+      });
+
+      // Ordenação: ativas antes de concluídas, depois ano decrescente.
+      filtradas.sort((a, b) => {
+        const fa = ehAtiva(dadosDeLinha(a).fim, hojeISO) ? 0 : 1;
+        const fb = ehAtiva(dadosDeLinha(b).fim, hojeISO) ? 0 : 1;
+        if (fa !== fb) return fa - fb;
+        return b.ano - a.ano;
+      });
+
+      setCandidatos(filtradas.slice(0, 30));
       setCarregando(false);
     }, 250);
     return () => {
       cancelado = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
-  }, [queryNorm, tenantId, aba]);
+  }, [queryNorm, tenantId, aba, soAtivas, hojeISO]);
 
   return (
     <div className="space-y-2">
@@ -93,6 +137,13 @@ export function SeletorCodigoTurma({
           align="start"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
+          <label className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2 text-xs cursor-pointer">
+            <Checkbox checked={soAtivas} onCheckedChange={(v) => setSoAtivas(!!v)} />
+            <div className="flex-1">
+              <div className="font-medium">{t("solicitacao_nova.seletor_so_ativas")}</div>
+              <div className="text-[10px] text-muted-foreground">{t("solicitacao_nova.seletor_so_ativas_desc")}</div>
+            </div>
+          </label>
           {carregando && (
             <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
@@ -105,12 +156,10 @@ export function SeletorCodigoTurma({
             <div className="p-3 text-sm text-muted-foreground">Nenhuma turma encontrada.</div>
           )}
           {!carregando && candidatos.length > 0 && (
-            <ul className="max-h-72 overflow-y-auto">
+            <ul className="max-h-80 overflow-y-auto">
               {candidatos.map((linha) => {
-                const dados = linha.dados as Record<string, string | null>;
-                const codigo = String(dados["CÓDIGO DA TURMA "] ?? dados["CÓDIGO DA TURMA"] ?? "—");
-                const disciplina = String(dados["DISCIPLINA"] ?? "");
-                const curso = String(dados["CURSO"] ?? "");
+                const { codigo, disciplina, curso, inicio, fim } = dadosDeLinha(linha);
+                const ativa = ehAtiva(fim, hojeISO);
                 return (
                   <li key={linha.id}>
                     <button
@@ -122,7 +171,18 @@ export function SeletorCodigoTurma({
                         setAberto(false);
                       }}
                     >
-                      <span className="font-mono text-xs">{codigo}</span>
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="font-mono text-xs">{codigo}</span>
+                        {inicio && fim ? (
+                          <span className={`text-[10px] ${ativa ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                            {t("solicitacao_nova.seletor_periodo", { inicio, fim })}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground italic">
+                            {t("solicitacao_nova.seletor_sem_periodo")}
+                          </span>
+                        )}
+                      </div>
                       <span className="font-medium">{disciplina}</span>
                       <span className="text-xs text-muted-foreground">{curso} · {linha.ano}</span>
                     </button>
@@ -134,16 +194,25 @@ export function SeletorCodigoTurma({
         </PopoverContent>
       </Popover>
 
-      {selecionada && (
-        <div className="rounded-md border bg-muted/30 p-3 text-xs">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="font-mono">{String((selecionada.dados as Record<string, string>)["CÓDIGO DA TURMA "] ?? (selecionada.dados as Record<string, string>)["CÓDIGO DA TURMA"] ?? "")}</span>
-            <span className="text-muted-foreground">Ano {selecionada.ano}</span>
+      {selecionada && (() => {
+        const { codigo, disciplina, curso, inicio, fim } = dadosDeLinha(selecionada);
+        return (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="font-mono">{codigo}</span>
+              {inicio && fim ? (
+                <span className="text-muted-foreground">
+                  {t("solicitacao_nova.seletor_periodo", { inicio, fim })}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Ano {selecionada.ano}</span>
+              )}
+            </div>
+            <div className="font-medium">{disciplina}</div>
+            <div className="text-muted-foreground">{curso}</div>
           </div>
-          <div className="font-medium">{String((selecionada.dados as Record<string, string>)["DISCIPLINA"] ?? "")}</div>
-          <div className="text-muted-foreground">{String((selecionada.dados as Record<string, string>)["CURSO"] ?? "")}</div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
