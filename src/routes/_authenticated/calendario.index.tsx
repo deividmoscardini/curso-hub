@@ -116,10 +116,20 @@ function CalendarioPage() {
     return l;
   }, [linhas, anoFiltro, busca]);
 
+  // Fase 11 — Mostra TODAS as colunas do Excel, na ordem em que o import
+  // gravou (Object.keys preserva a ordem de inserção do jsonb). Une as
+  // chaves de todas as linhas visíveis pra não perder colunas que aparecem
+  // só em algumas (ex.: PA tem colunas L..U que não estão em Disciplinas).
   const colunas = useMemo(() => {
     if (!filtradas.length) return [];
-    const primeiraDados = filtradas[0].dados;
-    return Object.keys(primeiraDados).slice(0, 8);
+    const vistas = new Set<string>();
+    const ordem: string[] = [];
+    for (const linha of filtradas) {
+      for (const chave of Object.keys(linha.dados)) {
+        if (!vistas.has(chave)) { vistas.add(chave); ordem.push(chave); }
+      }
+    }
+    return ordem;
   }, [filtradas]);
 
   if (loading) {
@@ -207,14 +217,14 @@ function CalendarioPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-md border bg-background">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+        <div className="max-h-[calc(100vh-16rem)] overflow-auto rounded-md border bg-background">
+          <table className="min-w-max text-sm">
+            <thead className="sticky top-0 z-20 bg-muted/95 text-left text-xs uppercase text-muted-foreground backdrop-blur">
               <tr>
-                <th className="p-2">{t("calendario.ano")}</th>
-                <th className="p-2">{t("calendario.ordem")}</th>
+                <th className="sticky left-0 z-30 bg-muted/95 p-2">{t("calendario.ano")}</th>
+                <th className="sticky left-14 z-30 bg-muted/95 p-2">{t("calendario.ordem")}</th>
                 {colunas.map((c) => (
-                  <th key={c} className="p-2">{c}</th>
+                  <th key={c} className="whitespace-nowrap p-2">{c}</th>
                 ))}
                 <th className="p-2">{t("calendario.historico")}</th>
                 <th className="p-2">{t("calendario.conflitos")}</th>
@@ -225,11 +235,11 @@ function CalendarioPage() {
                 const eventos = Array.isArray(l.comentarios) ? l.comentarios : [];
                 return (
                   <tr key={l.id} className="border-t hover:bg-muted/20">
-                    <td className="p-2 font-medium">{l.ano}</td>
-                    <td className="p-2">{l.ordem}</td>
+                    <td className="sticky left-0 z-10 bg-background p-2 font-medium">{l.ano}</td>
+                    <td className="sticky left-14 z-10 bg-background p-2">{l.ordem}</td>
                     {colunas.map((c) => (
-                      <td key={c} className="p-2 max-w-[200px] truncate">
-                        {formatarCelula(l.dados[c])}
+                      <td key={c} className="whitespace-nowrap p-2">
+                        {formatarCelula(c, l.dados[c])}
                       </td>
                     ))}
                     <td className="p-2">
@@ -259,8 +269,23 @@ function CalendarioPage() {
   );
 }
 
-function formatarCelula(v: unknown): string {
-  if (v == null) return "—";
+/**
+ * Fase 11 — Formata célula pra exibição na tabela. Se a chave da coluna
+ * indica data (DATA / LIVE / QUESTIONÁRIO / CAPTAÇÃO / INÍCIO / FIM) e o
+ * valor casa com ISO YYYY-MM-DD, formata em pt-BR/es-ES (dd/mm/aaaa).
+ * Do contrário, string ou JSON cru.
+ */
+function formatarCelula(chave: string, v: unknown): string {
+  if (v == null || v === "") return "—";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const upper = chave.toUpperCase();
+    const isData = /DATA|LIVE|QUESTIONÁRIO|CAPTAÇÃO|IN[IÍ]CIO|FIM|PRONTA|FECHAMENTO|ENVIO|PROTOCOLOS|BASE|CORRE[CÇ][AÃ]O|ENTREGA|PROVA/i.test(upper);
+    if (isData) {
+      const [y, m, d] = v.split("-");
+      return `${d}/${m}/${y}`;
+    }
+    return v;
+  }
   if (typeof v === "string" || typeof v === "number") return String(v);
   return JSON.stringify(v);
 }

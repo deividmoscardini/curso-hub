@@ -341,6 +341,15 @@ export const es: Dicionario = {
     busca_placeholder_admin: "Buscar por código, curso, asignatura…",
     chave: "Clave",
     mostrando_admin: "Mostrando las primeras {n} de {total} filas.",
+    recalcular_datas: "Recalcular fechas del año",
+    recalcular_titulo: "Recalcular fechas vía motor",
+    recalcular_desc: "El motor de reglas reproyectará las fechas derivadas (DATA FIM, LIVES, QUESTIONARIO, TÉRMINO CAPTAÇÃO) a partir de las anclas ya preenchidas (DATA INÍCIO de E1 + INÍCIO CAPTAÇÃO de E1). Las columnas no derivadas quedan intactas.",
+    recalcular_ano_lbl: "Año",
+    recalcular_confirmar: "Confirmar recálculo",
+    recalcular_toast_ok: "Recalculado: {linhas} fila(s) en {cursos} curso(s).",
+    recalcular_toast_avisos: "{n} aviso(s): ancla vacía en algunos cursos.",
+    recalcular_toast_erro: "Falla al recalcular",
+    recalcular_recalculando: "Recalculando…",
   },
 
   admin_usuarios: {

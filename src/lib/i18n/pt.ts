@@ -343,6 +343,15 @@ export const pt = {
     busca_placeholder_admin: "Buscar por código, curso, disciplina…",
     chave: "Chave",
     mostrando_admin: "Mostrando primeiras {n} de {total} linhas.",
+    recalcular_datas: "Recalcular datas do ano",
+    recalcular_titulo: "Recalcular datas via motor",
+    recalcular_desc: "O motor de regras vai reprojetar as datas derivadas (DATA FIM, LIVES, QUESTIONÁRIO, TÉRMINO CAPTAÇÃO) a partir das âncoras já preenchidas (DATA INÍCIO da E1 + INÍCIO CAPTAÇÃO da E1). Colunas que não são derivadas continuam intocadas.",
+    recalcular_ano_lbl: "Ano",
+    recalcular_confirmar: "Confirmar recálculo",
+    recalcular_toast_ok: "Recalculado: {linhas} linha(s) em {cursos} curso(s).",
+    recalcular_toast_avisos: "{n} aviso(s): âncora vazia em alguns cursos.",
+    recalcular_toast_erro: "Falha ao recalcular",
+    recalcular_recalculando: "Recalculando…",
   },
 
   admin_usuarios: {
