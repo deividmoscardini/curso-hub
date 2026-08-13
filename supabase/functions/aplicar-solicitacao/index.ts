@@ -388,6 +388,9 @@ Deno.serve(async (req: Request) => {
         nova_data?: string;
         motivo?: string;
         propagar_seguintes?: boolean;
+        // Fase 8.12 — pedido combo (live + prorrogação de término).
+        combo_prorrogar_termino?: boolean;
+        novo_termino_disciplina?: string;
       };
       if (!payload.chave_natural || !payload.campo || !payload.nova_data || !payload.motivo?.trim()) {
         return json(400, {
@@ -395,7 +398,10 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Subtipo A: valida que nova_data cai dentro do período da disciplina.
+      // Fase 8.12 — Validação de janela do subtipo A/live com 3 branches:
+      //   1) nova_data < inicio → bloqueia sempre (antecipação não é por aqui).
+      //   2) nova_data > fim SEM combo_prorrogar_termino → bloqueia (pedido incompleto).
+      //   3) nova_data > fim COM combo → passa (o combo cuida do término no mesmo pedido).
       // Chaves reais em `dados` vêm da planilha: "DATA  INÍCIO" (2 espaços) e "DATA FIM ".
       const validar =
         solTyped.tipo === "alterar_data_live"
@@ -403,8 +409,19 @@ Deno.serve(async (req: Request) => {
               const inicio = (linha.dados["DATA  INÍCIO"] ?? linha.dados["DATA INÍCIO"] ?? null) as string | null;
               const fim = (linha.dados["DATA FIM "] ?? linha.dados["DATA FIM"] ?? null) as string | null;
               if (!inicio || !fim) return null; // sem período conhecido, não bloqueia
-              if (payload.nova_data! < inicio || payload.nova_data! > fim) {
-                return `Data ${payload.nova_data} fora do período da disciplina (${inicio} a ${fim}). Se precisa mesmo dessa data, abra também uma alteração de término da disciplina.`;
+              if (payload.nova_data! < inicio) {
+                return `Data ${payload.nova_data} anterior ao início da disciplina (${inicio}). Abra uma alteração de início se precisa mudar o início.`;
+              }
+              if (payload.nova_data! > fim) {
+                if (!payload.combo_prorrogar_termino) {
+                  return `Data ${payload.nova_data} posterior ao término da disciplina (${fim}). Confirme "prorrogar disciplina junto" no form pra abrir um pedido combo.`;
+                }
+                if (!payload.novo_termino_disciplina) {
+                  return "combo_prorrogar_termino=true exige novo_termino_disciplina no payload.";
+                }
+                if (payload.novo_termino_disciplina < payload.nova_data!) {
+                  return `novo_termino_disciplina (${payload.novo_termino_disciplina}) precisa ser >= nova_data (${payload.nova_data}).`;
+                }
               }
               return null;
             }
@@ -428,6 +445,38 @@ Deno.serve(async (req: Request) => {
         valor_anterior: resultado.valor_anterior,
         valor_novo: payload.nova_data,
       };
+
+      // Fase 8.12 — Combo: após a live, aplica prorrogação de término +
+      // propaga pra atividade. Todas as mudanças com o mesmo solicitacao_id
+      // ficam agrupadas no comentarios[] da linha.
+      if (solTyped.tipo === "alterar_data_live" && payload.combo_prorrogar_termino && payload.novo_termino_disciplina) {
+        const resTermino = await aplicarMudancaEmLinha(sbAdmin, {
+          tenant_id: solicitacao.tenant_id,
+          chave_natural: payload.chave_natural,
+          campo: "DATA FIM ",
+          novo_valor: payload.novo_termino_disciplina,
+          motivo: `${payload.motivo} (prorrogação amarrada à alteração de live)`,
+          solicitacao_id: solicitacao.id,
+          autor_id: userId,
+        });
+        const resAtividade = await aplicarMudancaEmLinha(sbAdmin, {
+          tenant_id: solicitacao.tenant_id,
+          chave_natural: payload.chave_natural,
+          campo: "QUESTIONÁRIO (SEMANA 4)",
+          novo_valor: payload.novo_termino_disciplina,
+          motivo: `${payload.motivo} (propagação automática: término da atividade)`,
+          solicitacao_id: solicitacao.id,
+          autor_id: userId,
+        });
+        logDepois = {
+          ...logDepois,
+          combo: true,
+          termino: resTermino.ok
+            ? { valor_anterior: resTermino.valor_anterior, valor_novo: payload.novo_termino_disciplina }
+            : { erro: resTermino.erro },
+          atividade_propagada: resAtividade.ok,
+        };
+      }
 
       // Subtipo B/termino: também atualiza campo de atividade (mesma linha).
       // Regra da Bruna: término da disciplina = término da entrega da atividade.

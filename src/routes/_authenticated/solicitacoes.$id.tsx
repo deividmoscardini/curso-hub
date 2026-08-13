@@ -563,6 +563,9 @@ function AlteracaoDeDataDetalhe({ sol }: { sol: SolicitacaoDetalhe }) {
     nova_data?: string;
     motivo?: string;
     propagar_seguintes?: boolean;
+    combo_prorrogar_termino?: boolean;
+    novo_termino_disciplina?: string;
+    termino_anterior?: string | null;
   };
 
   return <AlteracaoDeDataDetalheCard sol={sol} payload={payload} />;
@@ -579,6 +582,9 @@ function AlteracaoDeDataDetalheCard({
     nova_data?: string;
     motivo?: string;
     propagar_seguintes?: boolean;
+    combo_prorrogar_termino?: boolean;
+    novo_termino_disciplina?: string;
+    termino_anterior?: string | null;
   };
 }) {
   const { t } = useT();
@@ -605,12 +611,18 @@ function AlteracaoDeDataDetalheCard({
   const fim = (dados["DATA FIM "] ?? dados["DATA FIM"] ?? null) as string | null;
   const valorAtual = payload.campo ? (dados[payload.campo] as string | null) : null;
 
+  // Fase 8.12 — Se combo, validação usa o NOVO término. Sem combo, usa o atual.
+  const fimEfetivo = payload.combo_prorrogar_termino && payload.novo_termino_disciplina
+    ? payload.novo_termino_disciplina
+    : fim;
   const foraDeJanela =
-    sol.tipo === "alterar_data_live" && !!(inicio && fim && payload.nova_data) &&
-    (payload.nova_data < inicio || payload.nova_data > fim);
+    sol.tipo === "alterar_data_live" && !!(inicio && fimEfetivo && payload.nova_data) &&
+    (payload.nova_data < inicio || payload.nova_data > fimEfetivo);
 
+  // Fase 8.12 — combo (live + prorrogação) tem título próprio.
+  const isCombo = sol.tipo === "alterar_data_live" && payload.combo_prorrogar_termino;
   const titulos: Record<string, string> = {
-    alterar_data_live: t("solicitacao_detalhe.titulo_live"),
+    alterar_data_live: isCombo ? t("solicitacao_detalhe.titulo_live_combo") : t("solicitacao_detalhe.titulo_live"),
     alterar_data_termino: t("solicitacao_detalhe.titulo_termino"),
     alterar_data_correcao: t("solicitacao_detalhe.titulo_correcao"),
     alterar_data_inicio: t("solicitacao_detalhe.titulo_inicio"),
@@ -636,20 +648,47 @@ function AlteracaoDeDataDetalheCard({
           )}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.campo")}</div>
-            <div className="mt-0.5 text-sm">{payload.campo ?? "—"}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.alteracao")}</div>
-            <div className="mt-0.5 text-sm">
-              <span className="text-muted-foreground line-through">{valorAtual ?? t("solicitacao_detalhe.sem_data")}</span>
-              <span className="mx-2">→</span>
-              <span className="font-medium">{payload.nova_data ?? "—"}</span>
+        {/* Fase 8.12 — Se combo, mostra 2 diffs empilhados (live + término).
+            Senão, mostra o diff único do subtipo simples. */}
+        {isCombo ? (
+          <div className="space-y-3 rounded-md border p-3">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.diff_live")}</div>
+              <div className="mt-0.5 text-sm">
+                <span className="text-muted-foreground">{payload.campo}: </span>
+                <span className="text-muted-foreground line-through">{valorAtual ?? t("solicitacao_detalhe.sem_data")}</span>
+                <span className="mx-2">→</span>
+                <span className="font-medium">{payload.nova_data ?? "—"}</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.diff_termino")}</div>
+              <div className="mt-0.5 text-sm">
+                <span className="text-muted-foreground line-through">{payload.termino_anterior ?? fim ?? t("solicitacao_detalhe.sem_data")}</span>
+                <span className="mx-2">→</span>
+                <span className="font-medium">{payload.novo_termino_disciplina ?? "—"}</span>
+              </div>
+            </div>
+            <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-300">
+              {t("solicitacao_detalhe.combo_aviso")}
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.campo")}</div>
+              <div className="mt-0.5 text-sm">{payload.campo ?? "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.alteracao")}</div>
+              <div className="mt-0.5 text-sm">
+                <span className="text-muted-foreground line-through">{valorAtual ?? t("solicitacao_detalhe.sem_data")}</span>
+                <span className="mx-2">→</span>
+                <span className="font-medium">{payload.nova_data ?? "—"}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {foraDeJanela && (
           <div className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">

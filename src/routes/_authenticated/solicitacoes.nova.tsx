@@ -666,6 +666,11 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
   const [profNome, setProfNome] = useState("");
   const [profEmail, setProfEmail] = useState("");
   const [profNotas, setProfNotas] = useState("");
+  // Fase 8.12 — Pedido combo: quando nova_data > fim, solicitante confirma
+  // que quer prorrogar o término da disciplina junto. Só então revela o
+  // campo novoTermino, e o pedido vira combo (live + término em 1 pedido).
+  const [confirmarProrrogacao, setConfirmarProrrogacao] = useState(false);
+  const [novoTermino, setNovoTermino] = useState("");
   const [campo, setCampo] = useState<string>("");
   const [novaData, setNovaData] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -676,9 +681,21 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
   const fim = linha ? CAMPO.fim(linha.dados) : null;
   const disciplinaNome = linha ? String((linha.dados as Record<string, unknown>)["DISCIPLINA"] ?? "") : "";
   const dataAtualLive = campo && linha ? String((linha.dados as Record<string, unknown>)[campo] ?? "") : "";
-  const foraDeJanela = !!(inicio && fim && novaData && (novaData < inicio || novaData > fim));
+
+  // Fase 8.12 — 3 estados possíveis de "fora da janela":
+  //   antesDeInicio → sempre bloqueia (antecipação não é permitida aqui).
+  //   depoisDoFim + sem confirmar → bloqueia com banner amarelo pedindo confirmação.
+  //   depoisDoFim + confirmado + novoTermino válido → libera (payload combo).
+  const antesDeInicio = !!(inicio && novaData && novaData < inicio);
+  const depoisDoFim = !!(fim && novaData && novaData > fim);
+  const diasAlem = fim && novaData && depoisDoFim
+    ? Math.ceil((new Date(novaData).getTime() - new Date(fim).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const novoTerminoValido = depoisDoFim && confirmarProrrogacao && !!novoTermino && novoTermino >= novaData;
+  const comboBloqueado = depoisDoFim && (!confirmarProrrogacao || !novoTerminoValido);
+
   const docenteOk = !trocarProf || profNome.trim().length > 0;
-  const podeEnviar = linha && campo && novaData && motivo.trim() && !foraDeJanela && docenteOk;
+  const podeEnviar = linha && campo && novaData && motivo.trim() && !antesDeInicio && !comboBloqueado && docenteOk;
 
   return (
     <Card>
@@ -726,10 +743,48 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
         {inicio && fim && (
           <div className="text-xs text-muted-foreground">{t("solicitacao_nova.periodo_disciplina", { inicio, fim })}</div>
         )}
-        {foraDeJanela && (
+
+        {/* Antecipação: bloqueia direto. */}
+        {antesDeInicio && inicio && (
           <div className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>{t("solicitacao_nova.data_fora_janela")}</div>
+            <div>{t("solicitacao_nova.live_antes_desc", { inicio })}</div>
+          </div>
+        )}
+
+        {/* Prorrogação: banner amarelo com confirmação. Depois de
+            confirmar, revela campo pra nova data de término. */}
+        {depoisDoFim && fim && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex-1">
+                <div className="font-semibold">{t("solicitacao_nova.live_fora_titulo")}</div>
+                <div className="mt-0.5">{t("solicitacao_nova.live_fora_desc", { dias: diasAlem, termino: fim })}</div>
+                {!confirmarProrrogacao && (
+                  <Button
+                    type="button" size="sm" variant="outline"
+                    className="mt-2 border-amber-500/60 bg-transparent hover:bg-amber-500/20"
+                    onClick={() => setConfirmarProrrogacao(true)}
+                  >
+                    {t("solicitacao_nova.confirmar_prorrogar")}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {confirmarProrrogacao && (
+              <div className="mt-3 space-y-2 rounded-md border border-amber-500/30 bg-white/40 p-3 dark:bg-black/20">
+                <Campo label={t("solicitacao_nova.novo_termino_junto")}>
+                  <Input type="date" value={novoTermino} onChange={(e) => setNovoTermino(e.target.value)} />
+                </Campo>
+                <div className="text-[11px] text-amber-700 dark:text-amber-300/80">{t("solicitacao_nova.novo_termino_junto_desc")}</div>
+                {novoTermino && novoTermino < novaData && (
+                  <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] text-red-800 dark:text-red-300">
+                    {t("solicitacao_nova.novo_termino_invalido")}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         <Campo label={t("comum.motivo_obrigatorio")}>
@@ -772,6 +827,11 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
               data_anterior: dataAtualLive || null,
               disciplina_nome: disciplinaNome || null,
               motivo: motivo.trim(),
+              ...(depoisDoFim && confirmarProrrogacao && novoTerminoValido && {
+                combo_prorrogar_termino: true,
+                novo_termino_disciplina: novoTermino,
+                termino_anterior: fim ?? null,
+              }),
               ...(trocarProf && {
                 trocar_docente: true,
                 novo_docente: {
