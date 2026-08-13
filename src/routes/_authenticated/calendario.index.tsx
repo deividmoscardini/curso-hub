@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { CalendarDays, AlertTriangle, History } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/contexts/i18n";
+import { colunasParaExibir, type AbaCalendario } from "@/lib/colunas-calendario";
 
 export const Route = createFileRoute("/_authenticated/calendario/")({
   head: () => ({
@@ -116,21 +117,10 @@ function CalendarioPage() {
     return l;
   }, [linhas, anoFiltro, busca]);
 
-  // Fase 11 — Mostra TODAS as colunas do Excel, na ordem em que o import
-  // gravou (Object.keys preserva a ordem de inserção do jsonb). Une as
-  // chaves de todas as linhas visíveis pra não perder colunas que aparecem
-  // só em algumas (ex.: PA tem colunas L..U que não estão em Disciplinas).
-  const colunas = useMemo(() => {
-    if (!filtradas.length) return [];
-    const vistas = new Set<string>();
-    const ordem: string[] = [];
-    for (const linha of filtradas) {
-      for (const chave of Object.keys(linha.dados)) {
-        if (!vistas.has(chave)) { vistas.add(chave); ordem.push(chave); }
-      }
-    }
-    return ordem;
-  }, [filtradas]);
+  // Fase 11 (fix) — Ordem canônica do Excel via colunas-calendario.ts.
+  // Postgres jsonb reordena as chaves ao gravar, então Object.keys volta
+  // embaralhado. A ordem hard-coded segue o Excel original por aba.
+  const colunas = useMemo(() => colunasParaExibir(aba as AbaCalendario, filtradas), [aba, filtradas]);
 
   if (loading) {
     return (

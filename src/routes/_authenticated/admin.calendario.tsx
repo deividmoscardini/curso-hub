@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "sonner";
 import { CalendarioEditModal, type LinhaEditavel } from "@/components/CalendarioEditModal";
 import { useT } from "@/contexts/i18n";
+import { colunasParaExibir, type AbaCalendario } from "@/lib/colunas-calendario";
 
 export const Route = createFileRoute("/_authenticated/admin/calendario")({
   head: () => ({ meta: [{ title: "Calendário — Admin" }] }),
@@ -124,18 +125,8 @@ function AdminCalendarioPage() {
     });
   }, [linhas, busca]);
 
-  // Fase 11 — Todas as colunas, ordem do Excel, união entre linhas.
-  const colunas = useMemo(() => {
-    if (!linhas || linhas.length === 0) return [];
-    const vistas = new Set<string>();
-    const ordem: string[] = [];
-    for (const linha of linhas) {
-      for (const chave of Object.keys(linha.dados ?? {})) {
-        if (!vistas.has(chave)) { vistas.add(chave); ordem.push(chave); }
-      }
-    }
-    return ordem;
-  }, [linhas]);
+  // Fase 11 (fix) — Ordem canônica do Excel (jsonb reordena chaves).
+  const colunas = useMemo(() => colunasParaExibir(aba as AbaCalendario, linhas ?? []), [aba, linhas]);
 
   function formatarCel(chave: string, v: unknown): string {
     if (v == null || v === "") return "—";
