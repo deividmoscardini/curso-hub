@@ -231,20 +231,30 @@ function CalendarioPage() {
           <table className="min-w-max text-sm">
             <thead className="sticky top-0 z-20 bg-muted/95 text-left text-xs uppercase text-muted-foreground backdrop-blur">
               <tr>
-                <th className="sticky left-0 z-30 bg-muted/95 p-2">{t("calendario.ano")}</th>
-                <th className="sticky left-14 z-30 bg-muted/95 p-2">{t("calendario.ordem")}</th>
-                {colunas.map((c) => (
-                  <th key={c} className="whitespace-nowrap p-2">{labelColuna(c)}</th>
+                {/* Fase 11.8 — Sem colunas sticky ANO/ORDEM extras. A primeira coluna canonica ja e ANO
+                    e ela mesma vira sticky-left. Assim nao duplica com a leitura de `l.dados["ANO"]`. */}
+                {colunas.map((c, i) => (
+                  <th
+                    key={c}
+                    className={
+                      i === 0
+                        ? "sticky left-0 z-30 whitespace-nowrap bg-muted/95 p-2"
+                        : "whitespace-nowrap p-2"
+                    }
+                  >
+                    {labelColuna(c)}
+                  </th>
                 ))}
                 <th className="p-2">{t("calendario.historico")}</th>
                 <th className="p-2">{t("calendario.conflitos")}</th>
               </tr>
               {/* Fase 11.7 — Linha de filtros por coluna. Case-insensitive contains. */}
               <tr className="border-t border-muted-foreground/10">
-                <th className="sticky left-0 z-30 bg-muted/95 p-1"></th>
-                <th className="sticky left-14 z-30 bg-muted/95 p-1"></th>
-                {colunas.map((c) => (
-                  <th key={c} className="p-1">
+                {colunas.map((c, i) => (
+                  <th
+                    key={c}
+                    className={i === 0 ? "sticky left-0 z-30 bg-muted/95 p-1" : "p-1"}
+                  >
                     <Input
                       value={filtrosCol[c] ?? ""}
                       onChange={(e) => setFiltrosCol((prev) => ({ ...prev, [c]: e.target.value }))}
@@ -262,10 +272,15 @@ function CalendarioPage() {
                 const eventos = Array.isArray(l.comentarios) ? l.comentarios : [];
                 return (
                   <tr key={l.id} className="border-t hover:bg-muted/20">
-                    <td className="sticky left-0 z-10 bg-background p-2 font-medium">{l.ano}</td>
-                    <td className="sticky left-14 z-10 bg-background p-2">{l.ordem}</td>
-                    {colunas.map((c) => (
-                      <td key={c} className="whitespace-nowrap p-2">
+                    {colunas.map((c, i) => (
+                      <td
+                        key={c}
+                        className={
+                          i === 0
+                            ? "sticky left-0 z-10 whitespace-nowrap bg-background p-2 font-medium"
+                            : "whitespace-nowrap p-2"
+                        }
+                      >
                         {formatarCelula(c, l.dados[c])}
                       </td>
                     ))}
