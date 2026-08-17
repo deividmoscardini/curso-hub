@@ -7,11 +7,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { CalendarDays, AlertTriangle, History, X } from "lucide-react";
+import { CalendarDays, AlertTriangle, History, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/contexts/i18n";
 import { colunasParaExibir, labelColuna, type AbaCalendario } from "@/lib/colunas-calendario";
+import {
+  DEFS_POR_ABA,
+  aplicarFiltros,
+  contarFiltrosAtivos,
+  filtrosVazios,
+  type FiltrosEstado,
+} from "@/lib/calendario-filtros";
+import { CalendarioFiltrosDrawer } from "@/components/calendario/CalendarioFiltrosDrawer";
+import { FiltroChips } from "@/components/calendario/FiltroChips";
 
 export const Route = createFileRoute("/_authenticated/calendario/")({
   head: () => ({
@@ -45,13 +54,6 @@ interface Linha {
   curso_id: string | null;
 }
 
-const ABA_LABEL: Record<Aba, string> = {
-  disciplinas: "Disciplinas",
-  projeto_aplicacao: "Projeto de Aplicação",
-  prova_substitutiva: "Prova Substitutiva",
-  fechamento: "Fechamento de turmas",
-};
-
 function CalendarioPage() {
   const { tenantId, tenants, loading } = useTenant();
   const { t } = useT();
@@ -64,9 +66,10 @@ function CalendarioPage() {
   const [aba, setAba] = useState<Aba>("disciplinas");
   const [busca, setBusca] = useState("");
   const [anoFiltro, setAnoFiltro] = useState<string>("");
-  // Fase 11.7 — Filtros por coluna. Chave = nome exato da coluna (com
-  // quirks do Excel), valor = texto de filtro. Case-insensitive contains.
-  const [filtrosCol, setFiltrosCol] = useState<Record<string, string>>({});
+  // Fase 11.9 — Filtros tipados por coluna, gerenciados pelo drawer
+  // lateral. Substitui os inputs por header da fase 11.7.
+  const [filtros, setFiltros] = useState<FiltrosEstado>(() => filtrosVazios());
+  const [drawerAberto, setDrawerAberto] = useState(false);
 
   const { data: linhas, isLoading } = useQuery({
     queryKey: ["calendario", tenantId, aba],
@@ -112,25 +115,16 @@ function CalendarioPage() {
   }, [linhas]);
 
   const filtradas = useMemo(() => {
-    let l = linhas ?? [];
+    let l: Linha[] = linhas ?? [];
     if (anoFiltro) l = l.filter((r) => String(r.ano) === anoFiltro);
     if (busca.trim()) {
       const q = busca.trim().toLowerCase();
       l = l.filter((r) => JSON.stringify(r.dados).toLowerCase().includes(q));
     }
-    // Filtros por coluna (Fase 11.7): applies AND — todos ativos precisam bater.
-    const ativos = Object.entries(filtrosCol).filter(([, v]) => v.trim().length > 0);
-    if (ativos.length > 0) {
-      l = l.filter((r) => ativos.every(([chave, valor]) => {
-        const v = (r.dados as Record<string, unknown>)[chave];
-        if (v == null) return false;
-        return String(v).toLowerCase().includes(valor.trim().toLowerCase());
-      }));
-    }
-    return l;
-  }, [linhas, anoFiltro, busca, filtrosCol]);
+    return aplicarFiltros(l, filtros, DEFS_POR_ABA[aba as AbaCalendario]) as Linha[];
+  }, [linhas, anoFiltro, busca, filtros, aba]);
 
-  const temFiltroCol = Object.values(filtrosCol).some((v) => v.trim().length > 0);
+  const nFiltros = useMemo(() => contarFiltrosAtivos(filtros), [filtros]);
 
   // Fase 11 (fix) — Ordem canônica do Excel via colunas-calendario.ts.
   // Postgres jsonb reordena as chaves ao gravar, então Object.keys volta
@@ -207,15 +201,35 @@ function CalendarioPage() {
             <option key={a} value={a}>{a}</option>
           ))}
         </select>
-        {temFiltroCol && (
-          <Button variant="ghost" size="sm" onClick={() => setFiltrosCol({})} className="gap-1 text-xs">
-            <X className="h-3 w-3" />{t("calendario.limpar_filtros")}
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setDrawerAberto(true)}
+          className="gap-1.5"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          {t("calendario.filtros_botao")}
+          {nFiltros > 0 && (
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+              {nFiltros}
+            </Badge>
+          )}
+        </Button>
         <div className="ml-auto text-xs text-muted-foreground">
           {t("calendario.contador_linhas", { n: filtradas.length.toLocaleString() })}
         </div>
       </div>
+
+      <FiltroChips aba={aba as AbaCalendario} filtros={filtros} onChange={setFiltros} />
+
+      <CalendarioFiltrosDrawer
+        open={drawerAberto}
+        onOpenChange={setDrawerAberto}
+        aba={aba as AbaCalendario}
+        linhas={linhas ?? []}
+        filtros={filtros}
+        onChange={setFiltros}
+      />
 
       {isLoading ? (
         <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>
@@ -231,8 +245,8 @@ function CalendarioPage() {
           <table className="min-w-max text-sm">
             <thead className="sticky top-0 z-20 bg-muted/95 text-left text-xs uppercase text-muted-foreground backdrop-blur">
               <tr>
-                {/* Fase 11.8 — Sem colunas sticky ANO/ORDEM extras. A primeira coluna canonica ja e ANO
-                    e ela mesma vira sticky-left. Assim nao duplica com a leitura de `l.dados["ANO"]`. */}
+                {/* Fase 11.8 — primeira coluna canonica ja e ANO e vira sticky-left,
+                    sem coluna sticky separada pra evitar duplicacao. */}
                 {colunas.map((c, i) => (
                   <th
                     key={c}
@@ -248,24 +262,8 @@ function CalendarioPage() {
                 <th className="p-2">{t("calendario.historico")}</th>
                 <th className="p-2">{t("calendario.conflitos")}</th>
               </tr>
-              {/* Fase 11.7 — Linha de filtros por coluna. Case-insensitive contains. */}
-              <tr className="border-t border-muted-foreground/10">
-                {colunas.map((c, i) => (
-                  <th
-                    key={c}
-                    className={i === 0 ? "sticky left-0 z-30 bg-muted/95 p-1" : "p-1"}
-                  >
-                    <Input
-                      value={filtrosCol[c] ?? ""}
-                      onChange={(e) => setFiltrosCol((prev) => ({ ...prev, [c]: e.target.value }))}
-                      placeholder={t("calendario.filtrar_placeholder")}
-                      className="h-7 min-w-24 border-muted-foreground/20 bg-background/60 text-xs font-normal normal-case"
-                    />
-                  </th>
-                ))}
-                <th className="p-1"></th>
-                <th className="p-1"></th>
-              </tr>
+              {/* Fase 11.9 — Linha de inputs de filtro no thead removida.
+                  Filtros migraram pro drawer lateral e chips no topo. */}
             </thead>
             <tbody>
               {filtradas.slice(0, 200).map((l) => {
@@ -364,9 +362,9 @@ function HistoricoBadge({ eventos }: { eventos: EventoComentario[] }) {
               {ev.campo_alterado && (
                 <div className="mt-1">
                   <span className="text-muted-foreground">{ev.campo_alterado}: </span>
-                  <span className="line-through text-muted-foreground">{formatarCelula(ev.valor_anterior)}</span>
+                  <span className="line-through text-muted-foreground">{formatarCelula(ev.campo_alterado, ev.valor_anterior)}</span>
                   <span className="mx-1">→</span>
-                  <span className="font-medium">{formatarCelula(ev.valor_novo)}</span>
+                  <span className="font-medium">{formatarCelula(ev.campo_alterado, ev.valor_novo)}</span>
                 </div>
               )}
               <div className="mt-1">{ev.motivo}</div>
