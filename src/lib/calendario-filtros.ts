@@ -223,3 +223,50 @@ export function contarFiltrosAtivos(filtros: FiltrosEstado): number {
   const d = Object.values(filtros.datas).filter((v) => v.de || v.ate).length;
   return t + m + n + d;
 }
+
+/**
+ * Serializa o estado de filtros para uma string curta (base64 de
+ * JSON URL-encoded) que cabe num query param sem quebrar chaves com
+ * espaço/acento. Retorna undefined quando não há filtro ativo — assim
+ * a URL fica limpa (`/calendario` em vez de `?f=eyJ0…`).
+ */
+export function encodeFiltros(filtros: FiltrosEstado): string | undefined {
+  if (contarFiltrosAtivos(filtros) === 0) return undefined;
+  try {
+    return btoa(encodeURIComponent(JSON.stringify(filtros)));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Reidrata o estado de filtros a partir do query param. Sanity check
+ * de forma — se o payload for lixo (usuário editou a URL na mão), volta
+ * pra estado vazio.
+ */
+export function decodeFiltros(encoded: string | undefined): FiltrosEstado {
+  const vazio = filtrosVazios();
+  if (!encoded) return vazio;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(atob(encoded))) as unknown;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "textos" in parsed &&
+      "multis" in parsed &&
+      "numeros" in parsed &&
+      "datas" in parsed
+    ) {
+      const p = parsed as FiltrosEstado;
+      return {
+        textos: typeof p.textos === "object" && p.textos ? p.textos : {},
+        multis: typeof p.multis === "object" && p.multis ? p.multis : {},
+        numeros: typeof p.numeros === "object" && p.numeros ? p.numeros : {},
+        datas: typeof p.datas === "object" && p.datas ? p.datas : {},
+      };
+    }
+  } catch {
+    // Cai no vazio.
+  }
+  return vazio;
+}

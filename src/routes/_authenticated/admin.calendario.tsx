@@ -6,7 +6,7 @@
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/tenant";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -24,18 +24,35 @@ import {
   DEFS_POR_ABA,
   aplicarFiltros,
   contarFiltrosAtivos,
-  filtrosVazios,
+  decodeFiltros,
+  encodeFiltros,
   type FiltrosEstado,
 } from "@/lib/calendario-filtros";
 import { CalendarioFiltrosDrawer } from "@/components/calendario/CalendarioFiltrosDrawer";
 import { FiltroChips } from "@/components/calendario/FiltroChips";
 
+type Aba = "disciplinas" | "projeto_aplicacao" | "prova_substitutiva" | "fechamento";
+
+interface SearchParams {
+  aba?: Aba;
+  q?: string;
+  f?: string;
+}
+
+const ABAS_VALIDAS: Aba[] = ["disciplinas", "projeto_aplicacao", "prova_substitutiva", "fechamento"];
+
 export const Route = createFileRoute("/_authenticated/admin/calendario")({
   head: () => ({ meta: [{ title: "Calendário — Admin" }] }),
+  // Fase 11.10 — Filtros persistem em URL. Diferente do /calendario
+  // publico, aqui nao ha filtro global de ano (o admin usa filtros
+  // por coluna pra ANO tambem).
+  validateSearch: (s: Record<string, unknown>): SearchParams => ({
+    aba: typeof s.aba === "string" && ABAS_VALIDAS.includes(s.aba as Aba) ? (s.aba as Aba) : undefined,
+    q: typeof s.q === "string" ? s.q : undefined,
+    f: typeof s.f === "string" ? s.f : undefined,
+  }),
   component: AdminCalendarioPage,
 });
-
-type Aba = "disciplinas" | "projeto_aplicacao" | "prova_substitutiva" | "fechamento";
 
 const ABA_LABEL: Record<Aba, string> = {
   disciplinas: "Disciplinas",
@@ -48,21 +65,36 @@ function AdminCalendarioPage() {
   const { tenantId, perfil } = useTenant();
   const { t } = useT();
   const qc = useQueryClient();
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const ABA_LABEL_LOCAL: Record<Aba, string> = {
     disciplinas: t("calendario.aba_disciplinas"),
     projeto_aplicacao: t("calendario.aba_projeto_aplicacao"),
     prova_substitutiva: t("calendario.aba_prova_substitutiva"),
     fechamento: t("calendario.aba_fechamento"),
   };
-  const [aba, setAba] = useState<Aba>("disciplinas");
-  const [busca, setBusca] = useState("");
+  const [aba, setAba] = useState<Aba>(search.aba ?? "disciplinas");
+  const [busca, setBusca] = useState(search.q ?? "");
   const [editando, setEditando] = useState<LinhaEditavel | null>(null);
   const [recalcularAberto, setRecalcularAberto] = useState(false);
   const [recalcularAno, setRecalcularAno] = useState<number>(new Date().getFullYear());
   const [recalculando, setRecalculando] = useState(false);
   // Fase 11.9.7 — Filtros tipados via drawer lateral (mesma UX do /calendario).
-  const [filtros, setFiltros] = useState<FiltrosEstado>(() => filtrosVazios());
+  const [filtros, setFiltros] = useState<FiltrosEstado>(() => decodeFiltros(search.f));
   const [drawerAberto, setDrawerAberto] = useState(false);
+
+  // Fase 11.10 — sync state → URL. `replace: true` mantem historico limpo.
+  useEffect(() => {
+    navigate({
+      search: {
+        aba: aba === "disciplinas" ? undefined : aba,
+        q: busca.trim() || undefined,
+        f: encodeFiltros(filtros),
+      },
+      replace: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, busca, filtros]);
 
   async function executarRecalculo() {
     if (!tenantId) return;
