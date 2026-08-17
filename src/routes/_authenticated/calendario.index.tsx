@@ -11,7 +11,7 @@ import { CalendarDays, AlertTriangle, History, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/contexts/i18n";
-import { colunasParaExibir, type AbaCalendario } from "@/lib/colunas-calendario";
+import { colunasParaExibir, labelColuna, type AbaCalendario } from "@/lib/colunas-calendario";
 
 export const Route = createFileRoute("/_authenticated/calendario/")({
   head: () => ({
@@ -234,7 +234,7 @@ function CalendarioPage() {
                 <th className="sticky left-0 z-30 bg-muted/95 p-2">{t("calendario.ano")}</th>
                 <th className="sticky left-14 z-30 bg-muted/95 p-2">{t("calendario.ordem")}</th>
                 {colunas.map((c) => (
-                  <th key={c} className="whitespace-nowrap p-2">{c}</th>
+                  <th key={c} className="whitespace-nowrap p-2">{labelColuna(c)}</th>
                 ))}
                 <th className="p-2">{t("calendario.historico")}</th>
                 <th className="p-2">{t("calendario.conflitos")}</th>

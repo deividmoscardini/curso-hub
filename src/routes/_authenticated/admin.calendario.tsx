@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "sonner";
 import { CalendarioEditModal, type LinhaEditavel } from "@/components/CalendarioEditModal";
 import { useT } from "@/contexts/i18n";
-import { colunasParaExibir, type AbaCalendario } from "@/lib/colunas-calendario";
+import { colunasParaExibir, labelColuna, type AbaCalendario } from "@/lib/colunas-calendario";
 
 export const Route = createFileRoute("/_authenticated/admin/calendario")({
   head: () => ({ meta: [{ title: "Calendário — Admin" }] }),
@@ -183,7 +183,7 @@ function AdminCalendarioPage() {
             <thead className="sticky top-0 z-20 bg-muted/95 text-left text-xs uppercase text-muted-foreground backdrop-blur">
               <tr>
                 <th className="sticky left-0 z-30 bg-muted/95 p-2">{t("admin_calendario.chave")}</th>
-                {colunas.map((c) => (<th key={c} className="whitespace-nowrap p-2">{c}</th>))}
+                {colunas.map((c) => (<th key={c} className="whitespace-nowrap p-2">{labelColuna(c)}</th>))}
                 <th className="p-2">{t("calendario.historico")}</th>
                 <th className="p-2"></th>
               </tr>

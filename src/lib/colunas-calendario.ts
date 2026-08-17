@@ -46,15 +46,14 @@ export const COLUNAS_POR_ABA: Record<AbaCalendario, readonly string[]> = {
   projeto_aplicacao: [
     "ANO",
     "OFERTA",
+    "SIGLA",
     "CÓD. DO CURSO",
     "CURSO",
-    "SIGLA",
     "CH",
     "TURMA",
-    "DIA DA SEMANA",
     "DATA INÍCIO",
     "DATA FIM ",
-    "DATA LIMITE DE ENTURMAÇÃO",
+    "DIA DA SEMANA",
     "LIVE 1",
     "LIVE 2 ",
     "(A) INÍCIO PARA A ENTREGA DO FEEDBACK",
@@ -101,24 +100,36 @@ export const COLUNAS_POR_ABA: Record<AbaCalendario, readonly string[]> = {
 } as const;
 
 /**
- * Retorna a lista final de colunas pra renderizar. Começa pela ordem
- * canônica da aba; qualquer chave nova encontrada nas linhas (que não
- * está na ordem canônica) vai pro final como "extras" pra não sumir.
+ * Retorna a lista final de colunas pra renderizar. Segue estritamente a
+ * ordem canônica quando ela existe (não mistura com extras) — a ordem
+ * é a que o time confirmou como oficial. Se um dia não houver ordem
+ * canônica pra alguma aba, cai no comportamento "todas as chaves das
+ * linhas" pra não sumir com dados.
  */
 export function colunasParaExibir(
   aba: AbaCalendario,
   linhas: Array<{ dados: Record<string, unknown> }>,
 ): string[] {
-  const canonicas = COLUNAS_POR_ABA[aba] ?? [];
-  const usadas = new Set<string>(canonicas);
+  const canonicas = COLUNAS_POR_ABA[aba];
+  if (canonicas && canonicas.length > 0) return [...canonicas];
+  const vistas = new Set<string>();
   const extras: string[] = [];
   for (const linha of linhas) {
     for (const chave of Object.keys(linha.dados ?? {})) {
-      if (!usadas.has(chave)) {
-        usadas.add(chave);
-        extras.push(chave);
-      }
+      if (!vistas.has(chave)) { vistas.add(chave); extras.push(chave); }
     }
   }
-  return [...canonicas, ...extras];
+  return extras;
+}
+
+/**
+ * Label amigável pra exibir no header da tabela. Remove trailing
+ * whitespace e colapsa espaços internos duplicados — o Excel original
+ * gerou headers com esses quirks e o import preservou. Aqui a gente
+ * mostra o texto "limpo" mas a chave interna continua sendo a original
+ * (essa função é só cosmética; leitura de `dados[chave]` continua
+ * usando a chave exata).
+ */
+export function labelColuna(chave: string): string {
+  return chave.replace(/\s+/g, " ").trim();
 }
