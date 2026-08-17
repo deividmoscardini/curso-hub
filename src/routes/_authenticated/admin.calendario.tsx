@@ -14,12 +14,21 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Pencil, ArrowLeft, RefreshCcw, Loader2 } from "lucide-react";
+import { AlertTriangle, Pencil, ArrowLeft, RefreshCcw, Loader2, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CalendarioEditModal, type LinhaEditavel } from "@/components/CalendarioEditModal";
 import { useT } from "@/contexts/i18n";
 import { colunasParaExibir, labelColuna, type AbaCalendario } from "@/lib/colunas-calendario";
+import {
+  DEFS_POR_ABA,
+  aplicarFiltros,
+  contarFiltrosAtivos,
+  filtrosVazios,
+  type FiltrosEstado,
+} from "@/lib/calendario-filtros";
+import { CalendarioFiltrosDrawer } from "@/components/calendario/CalendarioFiltrosDrawer";
+import { FiltroChips } from "@/components/calendario/FiltroChips";
 
 export const Route = createFileRoute("/_authenticated/admin/calendario")({
   head: () => ({ meta: [{ title: "Calendário — Admin" }] }),
@@ -51,6 +60,9 @@ function AdminCalendarioPage() {
   const [recalcularAberto, setRecalcularAberto] = useState(false);
   const [recalcularAno, setRecalcularAno] = useState<number>(new Date().getFullYear());
   const [recalculando, setRecalculando] = useState(false);
+  // Fase 11.9.7 — Filtros tipados via drawer lateral (mesma UX do /calendario).
+  const [filtros, setFiltros] = useState<FiltrosEstado>(() => filtrosVazios());
+  const [drawerAberto, setDrawerAberto] = useState(false);
 
   async function executarRecalculo() {
     if (!tenantId) return;
@@ -116,14 +128,18 @@ function AdminCalendarioPage() {
   });
 
   const filtradas = useMemo(() => {
-    if (!linhas) return [];
-    if (!busca.trim()) return linhas;
-    const q = busca.trim().toLowerCase();
-    return linhas.filter((l) => {
-      const blob = JSON.stringify(l.dados).toLowerCase();
-      return blob.includes(q) || l.chave_natural.toLowerCase().includes(q);
-    });
-  }, [linhas, busca]);
+    let l: LinhaEditavel[] = linhas ?? [];
+    if (busca.trim()) {
+      const q = busca.trim().toLowerCase();
+      l = l.filter((r) => {
+        const blob = JSON.stringify(r.dados).toLowerCase();
+        return blob.includes(q) || r.chave_natural.toLowerCase().includes(q);
+      });
+    }
+    return aplicarFiltros(l, filtros, DEFS_POR_ABA[aba as AbaCalendario]) as LinhaEditavel[];
+  }, [linhas, busca, filtros, aba]);
+
+  const nFiltros = useMemo(() => contarFiltrosAtivos(filtros), [filtros]);
 
   // Fase 11 (fix) — Ordem canônica do Excel (jsonb reordena chaves).
   const colunas = useMemo(() => colunasParaExibir(aba as AbaCalendario, linhas ?? []), [aba, linhas]);
@@ -171,7 +187,27 @@ function AdminCalendarioPage() {
           </TabsList>
         </Tabs>
         <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={t("admin_calendario.busca_placeholder_admin")} className="max-w-sm" />
+        <Button variant="outline" size="sm" onClick={() => setDrawerAberto(true)} className="gap-1.5">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          {t("calendario.filtros_botao")}
+          {nFiltros > 0 && (
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+              {nFiltros}
+            </Badge>
+          )}
+        </Button>
       </div>
+
+      <FiltroChips aba={aba as AbaCalendario} filtros={filtros} onChange={setFiltros} />
+
+      <CalendarioFiltrosDrawer
+        open={drawerAberto}
+        onOpenChange={setDrawerAberto}
+        aba={aba as AbaCalendario}
+        linhas={linhas ?? []}
+        filtros={filtros}
+        onChange={setFiltros}
+      />
 
       {isLoading ? (
         <Card><CardContent className="pt-6 text-sm text-muted-foreground">{t("comum.carregando")}</CardContent></Card>
