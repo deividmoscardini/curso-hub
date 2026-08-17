@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { CalendarDays, AlertTriangle, History } from "lucide-react";
+import { CalendarDays, AlertTriangle, History, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/contexts/i18n";
 import { colunasParaExibir, type AbaCalendario } from "@/lib/colunas-calendario";
@@ -63,6 +64,9 @@ function CalendarioPage() {
   const [aba, setAba] = useState<Aba>("disciplinas");
   const [busca, setBusca] = useState("");
   const [anoFiltro, setAnoFiltro] = useState<string>("");
+  // Fase 11.7 — Filtros por coluna. Chave = nome exato da coluna (com
+  // quirks do Excel), valor = texto de filtro. Case-insensitive contains.
+  const [filtrosCol, setFiltrosCol] = useState<Record<string, string>>({});
 
   const { data: linhas, isLoading } = useQuery({
     queryKey: ["calendario", tenantId, aba],
@@ -114,8 +118,19 @@ function CalendarioPage() {
       const q = busca.trim().toLowerCase();
       l = l.filter((r) => JSON.stringify(r.dados).toLowerCase().includes(q));
     }
+    // Filtros por coluna (Fase 11.7): applies AND — todos ativos precisam bater.
+    const ativos = Object.entries(filtrosCol).filter(([, v]) => v.trim().length > 0);
+    if (ativos.length > 0) {
+      l = l.filter((r) => ativos.every(([chave, valor]) => {
+        const v = (r.dados as Record<string, unknown>)[chave];
+        if (v == null) return false;
+        return String(v).toLowerCase().includes(valor.trim().toLowerCase());
+      }));
+    }
     return l;
-  }, [linhas, anoFiltro, busca]);
+  }, [linhas, anoFiltro, busca, filtrosCol]);
+
+  const temFiltroCol = Object.values(filtrosCol).some((v) => v.trim().length > 0);
 
   // Fase 11 (fix) — Ordem canônica do Excel via colunas-calendario.ts.
   // Postgres jsonb reordena as chaves ao gravar, então Object.keys volta
@@ -192,6 +207,11 @@ function CalendarioPage() {
             <option key={a} value={a}>{a}</option>
           ))}
         </select>
+        {temFiltroCol && (
+          <Button variant="ghost" size="sm" onClick={() => setFiltrosCol({})} className="gap-1 text-xs">
+            <X className="h-3 w-3" />{t("calendario.limpar_filtros")}
+          </Button>
+        )}
         <div className="ml-auto text-xs text-muted-foreground">
           {t("calendario.contador_linhas", { n: filtradas.length.toLocaleString() })}
         </div>
@@ -218,6 +238,23 @@ function CalendarioPage() {
                 ))}
                 <th className="p-2">{t("calendario.historico")}</th>
                 <th className="p-2">{t("calendario.conflitos")}</th>
+              </tr>
+              {/* Fase 11.7 — Linha de filtros por coluna. Case-insensitive contains. */}
+              <tr className="border-t border-muted-foreground/10">
+                <th className="sticky left-0 z-30 bg-muted/95 p-1"></th>
+                <th className="sticky left-14 z-30 bg-muted/95 p-1"></th>
+                {colunas.map((c) => (
+                  <th key={c} className="p-1">
+                    <Input
+                      value={filtrosCol[c] ?? ""}
+                      onChange={(e) => setFiltrosCol((prev) => ({ ...prev, [c]: e.target.value }))}
+                      placeholder={t("calendario.filtrar_placeholder")}
+                      className="h-7 min-w-24 border-muted-foreground/20 bg-background/60 text-xs font-normal normal-case"
+                    />
+                  </th>
+                ))}
+                <th className="p-1"></th>
+                <th className="p-1"></th>
               </tr>
             </thead>
             <tbody>

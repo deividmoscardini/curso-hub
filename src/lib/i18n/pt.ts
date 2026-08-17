@@ -96,6 +96,8 @@ export const pt = {
     sem_linhas_aba: "Sem linhas nessa aba.",
     mostrando_primeiras: "Mostrando primeiras {n} de {total} linhas.",
     refine_filtros: "Refine os filtros pra ver mais.",
+    limpar_filtros: "Limpar filtros",
+    filtrar_placeholder: "Filtrar…",
     subtitulo: "Visão viva do calendário do produto selecionado.",
     linhas: "linhas",
     sem_membro: "Você ainda não é membro de nenhum produto. Peça a um administrador da +A pra ser adicionado.",

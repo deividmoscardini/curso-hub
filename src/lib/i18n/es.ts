@@ -98,6 +98,8 @@ export const es: Dicionario = {
     sem_linhas_aba: "Sin filas en esta pestaña.",
     mostrando_primeiras: "Mostrando las primeras {n} de {total} filas.",
     refine_filtros: "Refina los filtros para ver más.",
+    limpar_filtros: "Limpiar filtros",
+    filtrar_placeholder: "Filtrar…",
     subtitulo: "Vista en vivo del calendario del producto seleccionado.",
     linhas: "filas",
     sem_membro: "Aún no eres miembro de ningún producto. Pídele a un administrador de +A que te agregue.",
