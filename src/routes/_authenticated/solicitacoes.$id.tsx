@@ -8,11 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Check, X, RotateCcw, AlertTriangle, Copy, TrendingUp } from "lucide-react";
+import { ArrowLeft, Loader2, Check, X, RotateCcw, AlertTriangle, Copy, TrendingUp, ChevronDown, ChevronRight, CheckSquare, Square } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { acharSimilar } from "@/lib/similaridade";
 import { validarChMinima, TIPO_CURSO_LABEL, type TipoCurso } from "@/lib/regras-tipo-curso";
 import { useT } from "@/contexts/i18n";
-import { formatarDataHora } from "@/lib/formatar-data";
+import { formatarData, formatarDataHora, type Idioma } from "@/lib/formatar-data";
+import { labelTipoSolicitacao } from "@/lib/tipo-solicitacao-labels";
+import { labelColuna } from "@/lib/colunas-calendario";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/$id")({
   head: () => ({ meta: [{ title: "Solicitação — Calendário +A" }] }),
@@ -67,6 +70,9 @@ function SolicitacaoDetalhePage() {
   };
   const [rejeitando, setRejeitando] = useState(false);
   const [devolvendo, setDevolvendo] = useState(false);
+  // Fase 12.4 — pre-preenchimento do motivo quando o usuario aciona
+  // "Devolver com esse motivo" a partir de um callout de validacao.
+  const [motivoPreenchido, setMotivoPreenchido] = useState<string>("");
   // Fase 7.7 — A8: cada disciplina/linha marcada localmente como "OK" antes
   // de aprovar a solicitacao inteira. Sem mudanca de schema — client-side only.
   const [linhasOk, setLinhasOk] = useState<Set<string>>(new Set());
@@ -142,7 +148,7 @@ function SolicitacaoDetalhePage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight capitalize">{sol.tipo.replace(/_/g, " ")}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{labelTipoSolicitacao(sol.tipo, idioma)}</h1>
             <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_CLS[sol.status] ?? ""}`}>
               {STATUS_LABEL_LOCAL[sol.status] ?? sol.status}
             </span>
@@ -282,12 +288,42 @@ function SolicitacaoDetalhePage() {
         </Card>
       )}
 
+      {/* Fase 12.3 — Novo curso: cards de resumo e cronograma acima da tabela. */}
+      {sol.tipo === "novo_curso" && <NovoCursoResumo sol={sol} idioma={idioma} />}
+
       {/* A8 — Aprovacao por linha (novo_curso): tabela com checkbox por disciplina */}
       {sol.tipo === "novo_curso" && chavesLinhas.length > 0 && podeDecidir && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t("solicitacao_detalhe.disciplinas_curso_titulo", { n: chavesLinhas.length })}</CardTitle>
-            <CardDescription>{t("solicitacao_detalhe.disciplinas_curso_desc")}</CardDescription>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">{t("solicitacao_detalhe.disciplinas_curso_titulo", { n: chavesLinhas.length })}</CardTitle>
+                <CardDescription>{t("solicitacao_detalhe.disciplinas_curso_desc_v2")}</CardDescription>
+              </div>
+              {/* Fase 12.3 — botoes de marcar/desmarcar em massa */}
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLinhasOk(new Set(chavesLinhas))}
+                  disabled={linhasOk.size === chavesLinhas.length}
+                  className="gap-1"
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  {t("solicitacao_detalhe.marcar_todas")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLinhasOk(new Set())}
+                  disabled={linhasOk.size === 0}
+                  className="gap-1"
+                >
+                  <Square className="h-3.5 w-3.5" />
+                  {t("solicitacao_detalhe.desmarcar_todas")}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -323,43 +359,28 @@ function SolicitacaoDetalhePage() {
               </table>
             </div>
             <div className="border-t bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              {t("solicitacao_detalhe.marcadas_como_ok", { ok: linhasOk.size, total: chavesLinhas.length })}
-              {linhasOk.size < chavesLinhas.length && t("solicitacao_detalhe.aprovar_liberado_quando")}
+              {linhasOk.size === chavesLinhas.length
+                ? t("solicitacao_detalhe.todas_marcadas", { n: chavesLinhas.length })
+                : t("solicitacao_detalhe.marque_todas_v2", { ok: linhasOk.size, total: chavesLinhas.length })}
             </div>
           </CardContent>
         </Card>
       )}
 
-      <AlteracaoDeDataDetalhe sol={sol} />
+      <AlteracaoDeDataDetalhe
+        sol={sol}
+        idioma={idioma}
+        onDevolverComMotivo={(motivo) => {
+          setMotivoPreenchido(motivo);
+          setDevolvendo(true);
+        }}
+      />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle className="text-base">{t("solicitacao_detalhe.dados_pedido")}</CardTitle></CardHeader>
-          <CardContent>
-            <pre className="max-h-96 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
-              {JSON.stringify(sol.payload, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
+      {/* Fase 12.2 — Previa do motor renderizada so pra subtipos que usam previa. */}
+      <PreviaMotorCard sol={sol} />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("solicitacao_detalhe.previa_motor")}</CardTitle>
-            <CardDescription>
-              {sol.previa ? t("solicitacao_detalhe.previa_desc") : t("solicitacao_detalhe.previa_vazia")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {sol.previa ? (
-              <pre className="max-h-96 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
-                {JSON.stringify(sol.previa, null, 2)}
-              </pre>
-            ) : (
-              <p className="text-sm text-muted-foreground">—</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Fase 12.2 — "Dados do pedido" agora e Collapsible (fechado por padrao). */}
+      <DadosPedidoCollapsible sol={sol} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">{t("solicitacao_detalhe.timeline")}</CardTitle></CardHeader>
@@ -387,7 +408,8 @@ function SolicitacaoDetalhePage() {
           titulo={t("solicitacao_detalhe.modal_devolver_titulo")}
           desc={t("solicitacao_detalhe.modal_devolver_desc")}
           submitLabel={t("comum.devolver")}
-          onClose={() => setDevolvendo(false)}
+          valorInicial={motivoPreenchido}
+          onClose={() => { setDevolvendo(false); setMotivoPreenchido(""); }}
           onSubmit={(comentario) => aplicar.mutate({ decisao: "devolver", comentario })}
           pending={aplicar.isPending}
         />
@@ -520,11 +542,12 @@ function useAnaliseEstrutural(sol: SolicitacaoDetalhe | null | undefined): Anali
   return { totalizador, duplicatas, divergencias, compartilhadas, ortografia };
 }
 
-function MotivoModal({ titulo, desc, submitLabel, onClose, onSubmit, pending }: {
+function MotivoModal({ titulo, desc, submitLabel, valorInicial, onClose, onSubmit, pending }: {
   titulo: string; desc: string; submitLabel: string;
+  valorInicial?: string;
   onClose: () => void; onSubmit: (v: string) => void; pending: boolean;
 }) {
-  const [valor, setValor] = useState("");
+  const [valor, setValor] = useState(valorInicial ?? "");
   return (
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent>
@@ -549,7 +572,13 @@ function MotivoModal({ titulo, desc, submitLabel, onClose, onSubmit, pending }: 
 // Mostra: turma alvo, campo alterado (data atual → nova), motivo em
 // destaque. Só aparece pros subtipos alterar_data_*; outros tipos caem
 // no bloco genérico "Dados do pedido" (JSON cru).
-function AlteracaoDeDataDetalhe({ sol }: { sol: SolicitacaoDetalhe }) {
+function AlteracaoDeDataDetalhe({
+  sol, idioma, onDevolverComMotivo,
+}: {
+  sol: SolicitacaoDetalhe;
+  idioma: Idioma;
+  onDevolverComMotivo: (motivo: string) => void;
+}) {
   const SUBTIPOS = new Set([
     "alterar_data_live",
     "alterar_data_termino",
@@ -569,12 +598,172 @@ function AlteracaoDeDataDetalhe({ sol }: { sol: SolicitacaoDetalhe }) {
     termino_anterior?: string | null;
   };
 
-  return <AlteracaoDeDataDetalheCard sol={sol} payload={payload} />;
+  return <AlteracaoDeDataDetalheCard
+    sol={sol} payload={payload} idioma={idioma}
+    onDevolverComMotivo={onDevolverComMotivo}
+  />;
+}
+
+// Fase 12.3 — Resumo do curso proposto + cronograma. Mostra os campos
+// que a Bruna reclamou de nao ver na tela do aprovador ("so trouxe as
+// 15 disciplinas").
+function NovoCursoResumo({ sol, idioma }: { sol: SolicitacaoDetalhe; idioma: Idioma }) {
+  const { t } = useT();
+  const p = (sol.payload ?? {}) as {
+    sigla?: string; nome?: string; codigo?: string;
+    tipo_curso?: TipoCurso;
+    escola?: string;
+    ano_estreia?: number | string;
+    captacao_inicio_e1?: string;
+    data_inicio_e1?: string;
+    captacao_inicio_e2?: string;
+    disciplinas?: Array<{ ch?: number }>;
+  };
+  const chTotal = (p.disciplinas ?? []).reduce((s, d) => s + (d.ch ?? 0), 0);
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{t("solicitacao_detalhe.resumo_curso_titulo")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5 text-sm">
+          <LinhaResumo label={t("solicitacao_nova.sigla")} valor={p.sigla} />
+          <LinhaResumo label={t("solicitacao_nova.nome_curso")} valor={p.nome} />
+          <LinhaResumo label={t("solicitacao_nova.codigo_curso")} valor={p.codigo} />
+          <LinhaResumo
+            label={t("solicitacao_nova.tipo_curso")}
+            valor={p.tipo_curso ? TIPO_CURSO_LABEL[p.tipo_curso] : null}
+          />
+          <LinhaResumo label={t("solicitacao_nova.escola")} valor={p.escola} />
+          <LinhaResumo
+            label={t("solicitacao_detalhe.ch_total_lbl_curto")}
+            valor={chTotal > 0 ? `${chTotal}h` : null}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{t("solicitacao_detalhe.cronograma_titulo")}</CardTitle>
+          <CardDescription>{t("solicitacao_detalhe.cronograma_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1.5 text-sm">
+          <LinhaResumo label={t("solicitacao_nova.ano_estreia")} valor={p.ano_estreia?.toString()} />
+          <LinhaResumo
+            label={t("solicitacao_detalhe.primeira_captacao")}
+            valor={p.captacao_inicio_e1 ? formatarData(p.captacao_inicio_e1, idioma) : null}
+          />
+          <LinhaResumo
+            label={t("solicitacao_detalhe.inicio_aulas")}
+            valor={p.data_inicio_e1 ? formatarData(p.data_inicio_e1, idioma) : null}
+          />
+          <LinhaResumo
+            label={t("solicitacao_detalhe.segunda_captacao")}
+            valor={p.captacao_inicio_e2 ? formatarData(p.captacao_inicio_e2, idioma) : null}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Fase 12.2 — Diff visual de datas: valor anterior em cinza riscado,
+// nova data com destaque verde. Ambos em dd/mm/aaaa (pt-BR / es-ES).
+function DiffData({
+  anterior, nova, idioma,
+}: {
+  anterior: string | null | undefined;
+  nova: string | null | undefined;
+  idioma: Idioma;
+}) {
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+      <span className="rounded bg-muted/60 px-2 py-0.5 text-muted-foreground line-through">
+        {anterior ? formatarData(anterior, idioma) : "—"}
+      </span>
+      <span className="text-muted-foreground">→</span>
+      <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-800 dark:text-emerald-300">
+        {nova ? formatarData(nova, idioma) : "—"}
+      </span>
+    </div>
+  );
+}
+
+function LinhaResumo({ label, valor }: { label: string; valor: string | null | undefined }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-right font-medium">{valor?.toString().trim() || "—"}</span>
+    </div>
+  );
+}
+
+// Fase 12.2 — Previa do motor: renderiza so quando faz sentido. Pros
+// subtipos que nao usam previa (alterar_data_*, cancelar_oferta) o
+// bloco fica escondido. Pros que usam mas ainda nao rodaram, mensagem
+// clara ao inves de "sem previa calculado".
+function PreviaMotorCard({ sol }: { sol: SolicitacaoDetalhe }) {
+  const { t } = useT();
+  const subtiposSemPrevia = new Set([
+    "alterar_data_live",
+    "alterar_data_termino",
+    "alterar_data_correcao",
+    "alterar_data_inicio",
+    "cancelar_oferta",
+  ]);
+  if (subtiposSemPrevia.has(sol.tipo)) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">{t("solicitacao_detalhe.previa_motor")}</CardTitle>
+        <CardDescription>
+          {sol.previa
+            ? t("solicitacao_detalhe.previa_desc")
+            : t("solicitacao_detalhe.previa_sera_calculada")}
+        </CardDescription>
+      </CardHeader>
+      {sol.previa && (
+        <CardContent>
+          <pre className="max-h-96 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
+            {JSON.stringify(sol.previa, null, 2)}
+          </pre>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+// Fase 12.2 — Dados do pedido: JSON tecnico escondido por padrao. So
+// aparece se o aprovador clicar "Ver payload tecnico" — Bruna nao
+// precisa disso na leitura padrao.
+function DadosPedidoCollapsible({ sol }: { sol: SolicitacaoDetalhe }) {
+  const { t } = useT();
+  const [aberto, setAberto] = useState(false);
+  return (
+    <Card>
+      <Collapsible open={aberto} onOpenChange={setAberto}>
+        <CollapsibleTrigger className="flex w-full items-center gap-2 px-6 py-3 text-left">
+          {aberto ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          <span className="text-sm font-medium">{t("solicitacao_detalhe.ver_payload_tecnico")}</span>
+          <span className="ml-auto text-xs text-muted-foreground">{t("solicitacao_detalhe.ver_payload_tecnico_hint")}</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-6 pb-4">
+            <pre className="max-h-96 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
+              {JSON.stringify(sol.payload, null, 2)}
+            </pre>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
+  );
 }
 
 function AlteracaoDeDataDetalheCard({
   sol,
   payload,
+  idioma,
+  onDevolverComMotivo,
 }: {
   sol: SolicitacaoDetalhe;
   payload: {
@@ -587,6 +776,8 @@ function AlteracaoDeDataDetalheCard({
     novo_termino_disciplina?: string;
     termino_anterior?: string | null;
   };
+  idioma: Idioma;
+  onDevolverComMotivo: (motivo: string) => void;
 }) {
   const { t } = useT();
   const { data: linha } = useQuery({
@@ -644,58 +835,82 @@ function AlteracaoDeDataDetalheCard({
           <div className="text-xs text-muted-foreground">{curso}</div>
           {inicio && fim && (
             <div className="mt-2 text-xs text-muted-foreground">
-              {t("solicitacao_nova.periodo_disciplina", { inicio, fim })}
+              {t("solicitacao_nova.periodo_disciplina", {
+                inicio: formatarData(inicio, idioma),
+                fim: formatarData(fim, idioma),
+              })}
             </div>
           )}
         </div>
 
         {/* Fase 8.12 — Se combo, mostra 2 diffs empilhados (live + término).
-            Senão, mostra o diff único do subtipo simples. */}
+            Senão, mostra o diff único do subtipo simples.
+            Fase 12.2 — datas do diff formatadas em dd/mm/aaaa. Nova data
+            em destaque verde; anterior riscada em cinza. */}
         {isCombo ? (
           <div className="space-y-3 rounded-md border p-3">
             <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.diff_live")}</div>
-              <div className="mt-0.5 text-sm">
-                <span className="text-muted-foreground">{payload.campo}: </span>
-                <span className="text-muted-foreground line-through">{valorAtual ?? t("solicitacao_detalhe.sem_data")}</span>
-                <span className="mx-2">→</span>
-                <span className="font-medium">{payload.nova_data ?? "—"}</span>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t("solicitacao_detalhe.diff_live")}
+                {payload.campo && <span className="ml-1 normal-case text-muted-foreground">· {labelColuna(payload.campo)}</span>}
               </div>
+              <DiffData anterior={valorAtual} nova={payload.nova_data} idioma={idioma} />
             </div>
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.diff_termino")}</div>
-              <div className="mt-0.5 text-sm">
-                <span className="text-muted-foreground line-through">{payload.termino_anterior ?? fim ?? t("solicitacao_detalhe.sem_data")}</span>
-                <span className="mx-2">→</span>
-                <span className="font-medium">{payload.novo_termino_disciplina ?? "—"}</span>
-              </div>
+              <DiffData
+                anterior={payload.termino_anterior ?? fim ?? null}
+                nova={payload.novo_termino_disciplina}
+                idioma={idioma}
+              />
             </div>
             <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-300">
               {t("solicitacao_detalhe.combo_aviso")}
             </div>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.campo")}</div>
-              <div className="mt-0.5 text-sm">{payload.campo ?? "—"}</div>
+          <div className="rounded-md border p-3">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              {payload.campo ? labelColuna(payload.campo) : t("solicitacao_detalhe.alteracao")}
             </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("solicitacao_detalhe.alteracao")}</div>
-              <div className="mt-0.5 text-sm">
-                <span className="text-muted-foreground line-through">{valorAtual ?? t("solicitacao_detalhe.sem_data")}</span>
-                <span className="mx-2">→</span>
-                <span className="font-medium">{payload.nova_data ?? "—"}</span>
-              </div>
-            </div>
+            <DiffData anterior={valorAtual} nova={payload.nova_data} idioma={idioma} />
           </div>
         )}
 
         {foraDeJanela && (
-          <div className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <span className="font-medium">{t("solicitacao_detalhe.fora_do_periodo")}</span> {t("solicitacao_detalhe.fora_do_periodo_aviso")}
+          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
+            {/* Fase 12.4 — mensagem padrao "O que aconteceu / Por que / Como resolver" */}
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="space-y-1">
+                <div className="font-medium">{t("solicitacao_detalhe.fora_do_periodo_v2_titulo")}</div>
+                <div>
+                  {t("solicitacao_detalhe.fora_do_periodo_v2_desc", {
+                    nova: formatarData(payload.nova_data, idioma),
+                    fim: formatarData(fimEfetivo, idioma),
+                  })}
+                </div>
+                <div>
+                  <span className="font-medium">{t("solicitacao_detalhe.como_resolver")}</span>{" "}
+                  {t("solicitacao_detalhe.fora_do_periodo_v2_solucao")}
+                </div>
+              </div>
+            </div>
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDevolverComMotivo(
+                  t("solicitacao_detalhe.motivo_prefill_fora_janela", {
+                    nova: formatarData(payload.nova_data, idioma),
+                    fim: formatarData(fimEfetivo, idioma),
+                  })
+                )}
+                className="h-7 gap-1 text-xs"
+              >
+                <RotateCcw className="h-3 w-3" />
+                {t("solicitacao_detalhe.devolver_com_esse_motivo")}
+              </Button>
             </div>
           </div>
         )}
