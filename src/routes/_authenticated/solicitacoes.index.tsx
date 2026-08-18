@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, Inbox } from "lucide-react";
 import { useT } from "@/contexts/i18n";
 import { formatarDataHora } from "@/lib/formatar-data";
+import { labelTipoSolicitacao } from "@/lib/tipo-solicitacao-labels";
+import { resumirSolicitacao } from "@/lib/resumir-solicitacao";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/")({
   head: () => ({ meta: [{ title: "Solicitações — Calendário +A" }] }),
@@ -21,6 +23,7 @@ interface SolicitacaoRow {
   ano: number | null;
   status: string;
   criado_em: string;
+  payload: unknown;
   solicitante: { nome: string; email: string } | null;
 }
 
@@ -54,7 +57,7 @@ function SolicitacoesListaPage() {
     queryFn: async () => {
       let q = supabase
         .from("solicitacoes")
-        .select(`id, tenant_id, tipo, aba, ano, status, criado_em, solicitante:solicitante_id(nome, email)`)
+        .select(`id, tenant_id, tipo, aba, ano, status, criado_em, payload, solicitante:solicitante_id(nome, email)`)
         .order("criado_em", { ascending: false })
         .limit(200);
       if (tenantId) q = q.eq("tenant_id", tenantId);
@@ -93,7 +96,7 @@ function SolicitacoesListaPage() {
                     <th className="p-2">{t("solicitacoes_lista.coluna_criada")}</th>
                     <th className="p-2">{t("admin_solicitacoes.coluna_solicitante")}</th>
                     <th className="p-2">{t("solicitacoes_lista.coluna_tipo")}</th>
-                    <th className="p-2">{t("solicitacao_detalhe.campo")}</th>
+                    <th className="p-2">{t("solicitacoes_lista.coluna_resumo")}</th>
                     <th className="p-2">{t("calendario.ano")}</th>
                     <th className="p-2">{t("solicitacoes_lista.coluna_status")}</th>
                     <th className="p-2"></th>
@@ -104,8 +107,8 @@ function SolicitacoesListaPage() {
                     <tr key={s.id} className="border-t hover:bg-muted/20">
                       <td className="p-2 text-xs">{formatarDataHora(s.criado_em, idioma)}</td>
                       <td className="p-2 text-xs">{s.solicitante?.nome ?? "—"}</td>
-                      <td className="p-2 text-xs capitalize">{s.tipo.replace(/_/g, " ")}</td>
-                      <td className="p-2 text-xs">{s.aba ?? "—"}</td>
+                      <td className="p-2 text-xs">{labelTipoSolicitacao(s.tipo, idioma)}</td>
+                      <td className="p-2 text-xs text-muted-foreground">{resumirSolicitacao(s, idioma)}</td>
                       <td className="p-2 text-xs">{s.ano ?? "—"}</td>
                       <td className="p-2">
                         <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_CLS[s.status] ?? ""}`}>

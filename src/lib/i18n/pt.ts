@@ -467,6 +467,7 @@ export const pt = {
     coluna_produto: "Produto",
     coluna_status: "Status",
     coluna_criada: "Criada em",
+    coluna_resumo: "Resumo",
     coluna_acoes: "Ações",
     sem_solicitacoes: "Nenhuma solicitação encontrada.",
     ver: "Ver",
@@ -486,6 +487,7 @@ export const pt = {
     contagem: "{n} solicitações",
     aprovado_em: "Aprovado em",
     so_admin: "Só admin global.",
+    buscar_placeholder: "Buscar por solicitante, produto ou resumo…",
   },
 
   produtos: {
@@ -544,6 +546,7 @@ export const pt = {
     subtitulo: "Solicitações que você criou.",
     nova: "Nova solicitação",
     coluna_tipo: "Tipo",
+    coluna_resumo: "Resumo",
     coluna_status: "Status",
     coluna_criada: "Criada",
     coluna_atualizada: "Atualizada",

@@ -5,8 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/tenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useT } from "@/contexts/i18n";
 import { formatarData, formatarDataHora } from "@/lib/formatar-data";
+import { labelTipoSolicitacao } from "@/lib/tipo-solicitacao-labels";
+import { resumirSolicitacao } from "@/lib/resumir-solicitacao";
 
 export const Route = createFileRoute("/_authenticated/admin/solicitacoes")({
   head: () => ({ meta: [{ title: "Solicitações — Admin" }] }),
@@ -14,7 +17,12 @@ export const Route = createFileRoute("/_authenticated/admin/solicitacoes")({
 });
 
 type StatusSolicitacao = "pendente" | "em_revisao" | "aprovada" | "aplicada" | "rejeitada" | "devolvida";
-type TipoSolicitacao = "gerar_ano" | "nova_oferta" | "ajuste_ancora" | "ajuste_manual" | "cancelar_oferta" | "novo_curso" | "reordenar_carrossel";
+type TipoSolicitacao =
+  | "gerar_ano" | "nova_oferta" | "cancelar_oferta"
+  | "novo_curso" | "reordenar_carrossel"
+  | "alterar_data_live" | "alterar_data_termino"
+  | "alterar_data_correcao" | "alterar_data_inicio"
+  | "ajuste_ancora" | "ajuste_manual"; // legacy — historicos antigos
 
 interface SolicitacaoRow {
   id: string;
@@ -27,6 +35,7 @@ interface SolicitacaoRow {
   criado_em: string;
   aprovado_em: string | null;
   aplicado_em: string | null;
+  payload: unknown;
   tenants: { nome: string } | null;
   solicitante: { nome: string; email: string } | null;
 }
@@ -57,6 +66,7 @@ function AdminSolicitacoesPage() {
   };
   const [statusFiltro, setStatusFiltro] = useState<StatusSolicitacao | "">("");
   const [tipoFiltro, setTipoFiltro] = useState<TipoSolicitacao | "">("");
+  const [busca, setBusca] = useState("");
 
   const { data: solicitacoes } = useQuery({
     queryKey: ["admin-solicitacoes"],
@@ -65,7 +75,7 @@ function AdminSolicitacoesPage() {
         .from("solicitacoes")
         .select(`
           id, tenant_id, solicitante_id, tipo, aba, ano, status,
-          criado_em, aprovado_em, aplicado_em,
+          criado_em, aprovado_em, aplicado_em, payload,
           tenants(nome),
           solicitante:solicitante_id(nome, email)
         `)
@@ -81,8 +91,19 @@ function AdminSolicitacoesPage() {
     let s = solicitacoes ?? [];
     if (statusFiltro) s = s.filter((r) => r.status === statusFiltro);
     if (tipoFiltro) s = s.filter((r) => r.tipo === tipoFiltro);
+    if (busca.trim()) {
+      // Fase 12.5 — busca contains em nome do solicitante + resumo.
+      const q = busca.trim().toLowerCase();
+      s = s.filter((r) => {
+        const nome = r.solicitante?.nome?.toLowerCase() ?? "";
+        const email = r.solicitante?.email?.toLowerCase() ?? "";
+        const resumo = resumirSolicitacao(r, idioma).toLowerCase();
+        const tenant = r.tenants?.nome?.toLowerCase() ?? "";
+        return nome.includes(q) || email.includes(q) || resumo.includes(q) || tenant.includes(q);
+      });
+    }
     return s;
-  }, [solicitacoes, statusFiltro, tipoFiltro]);
+  }, [solicitacoes, statusFiltro, tipoFiltro, busca, idioma]);
 
   const contagens = useMemo(() => {
     const c: Record<StatusSolicitacao, number> = {
@@ -123,19 +144,27 @@ function AdminSolicitacoesPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder={t("admin_solicitacoes.buscar_placeholder")}
+          className="max-w-xs"
+        />
         <select
           value={tipoFiltro}
           onChange={(e) => setTipoFiltro(e.target.value as TipoSolicitacao | "")}
           className="rounded-md border bg-background px-3 py-1.5 text-sm"
         >
           <option value="">{t("admin_solicitacoes.todos_tipos")}</option>
-          <option value="novo_curso">{t("admin_solicitacoes.tipo_novo_curso")}</option>
-          <option value="ajuste_ancora">{t("admin_solicitacoes.tipo_alterar_data_live")}</option>
-          <option value="ajuste_manual">{t("admin_solicitacoes.tipo_alterar_data_termino")}</option>
-          <option value="reordenar_carrossel">{t("admin_solicitacoes.tipo_reordenar")}</option>
-          <option value="nova_oferta">{t("admin_solicitacoes.tipo_nova_oferta")}</option>
-          <option value="cancelar_oferta">{t("admin_solicitacoes.tipo_cancelar_oferta")}</option>
-          <option value="gerar_ano">{t("admin_solicitacoes.tipo_gerar_ano")}</option>
+          <option value="novo_curso">{labelTipoSolicitacao("novo_curso", idioma)}</option>
+          <option value="alterar_data_live">{labelTipoSolicitacao("alterar_data_live", idioma)}</option>
+          <option value="alterar_data_termino">{labelTipoSolicitacao("alterar_data_termino", idioma)}</option>
+          <option value="alterar_data_correcao">{labelTipoSolicitacao("alterar_data_correcao", idioma)}</option>
+          <option value="alterar_data_inicio">{labelTipoSolicitacao("alterar_data_inicio", idioma)}</option>
+          <option value="reordenar_carrossel">{labelTipoSolicitacao("reordenar_carrossel", idioma)}</option>
+          <option value="nova_oferta">{labelTipoSolicitacao("nova_oferta", idioma)}</option>
+          <option value="cancelar_oferta">{labelTipoSolicitacao("cancelar_oferta", idioma)}</option>
+          <option value="gerar_ano">{labelTipoSolicitacao("gerar_ano", idioma)}</option>
         </select>
         <div className="ml-auto text-xs text-muted-foreground">
           {t("admin_solicitacoes.contagem", { n: filtradas.length.toLocaleString() })}
@@ -152,6 +181,7 @@ function AdminSolicitacoesPage() {
                   <th className="p-2">{t("admin_solicitacoes.coluna_solicitante")}</th>
                   <th className="p-2">{t("admin_solicitacoes.coluna_produto")}</th>
                   <th className="p-2">{t("admin_solicitacoes.coluna_tipo")}</th>
+                  <th className="p-2">{t("solicitacoes_lista.coluna_resumo")}</th>
                   <th className="p-2">{t("calendario.ano")}</th>
                   <th className="p-2">{t("admin_solicitacoes.coluna_status")}</th>
                   <th className="p-2">{t("admin_solicitacoes.aprovado_em")}</th>
@@ -160,7 +190,7 @@ function AdminSolicitacoesPage() {
               </thead>
               <tbody>
                 {filtradas.length === 0 ? (
-                  <tr><td colSpan={8} className="p-6 text-center text-sm text-muted-foreground">{t("admin_solicitacoes.sem_solicitacoes")}</td></tr>
+                  <tr><td colSpan={9} className="p-6 text-center text-sm text-muted-foreground">{t("admin_solicitacoes.sem_solicitacoes")}</td></tr>
                 ) : filtradas.map((s) => (
                   <tr key={s.id} className="border-t hover:bg-muted/20">
                     <td className="p-2 text-xs">{formatarDataHora(s.criado_em, idioma)}</td>
@@ -169,7 +199,8 @@ function AdminSolicitacoesPage() {
                       <div className="text-[10px] text-muted-foreground">{s.solicitante?.email}</div>
                     </td>
                     <td className="p-2 text-xs">{s.tenants?.nome ?? "—"}</td>
-                    <td className="p-2 text-xs capitalize">{s.tipo.replace(/_/g, " ")}</td>
+                    <td className="p-2 text-xs">{labelTipoSolicitacao(s.tipo, idioma)}</td>
+                    <td className="p-2 text-xs text-muted-foreground">{resumirSolicitacao(s, idioma)}</td>
                     <td className="p-2 text-xs">{s.ano ?? "—"}</td>
                     <td className="p-2">
                       <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_CLS[s.status]}`}>

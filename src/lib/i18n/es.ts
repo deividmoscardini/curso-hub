@@ -465,6 +465,7 @@ export const es: Dicionario = {
     coluna_produto: "Producto",
     coluna_status: "Estado",
     coluna_criada: "Creada el",
+    coluna_resumo: "Resumen",
     coluna_acoes: "Acciones",
     sem_solicitacoes: "Ninguna solicitud encontrada.",
     ver: "Ver",
@@ -484,6 +485,7 @@ export const es: Dicionario = {
     contagem: "{n} solicitudes",
     aprovado_em: "Aprobado el",
     so_admin: "Solo admin global.",
+    buscar_placeholder: "Buscar por solicitante, producto o resumen…",
   },
 
   produtos: {
@@ -542,6 +544,7 @@ export const es: Dicionario = {
     subtitulo: "Solicitudes que creaste.",
     nova: "Nueva solicitud",
     coluna_tipo: "Tipo",
+    coluna_resumo: "Resumen",
     coluna_status: "Estado",
     coluna_criada: "Creada",
     coluna_atualizada: "Actualizada",
