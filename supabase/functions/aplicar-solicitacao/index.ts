@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Edge Function: aplicar-solicitacao (v2)
  *
  * Registra a decisão do aprovador (aprovar / rejeitar / devolver) e, em
@@ -35,6 +35,24 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+/**
+ * Fase 12.8 — Deriva sigla de 3 letras a partir do nome do curso.
+ * Espelha a heuristica da Fase 7.3 S3 (front): ignora preposicoes/artigos
+ * PT-BR e trava em 3 letras maiusculas. Usado so como fallback quando o
+ * form nao envia sigla explicita.
+ */
+function derivarSigla(nome: string): string {
+  const stop = new Set(["de", "da", "do", "das", "dos", "e", "a", "o", "as", "os", "em", "para", "com"]);
+  const iniciais = nome
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 0 && !stop.has(w.toLowerCase()))
+    .map((w) => w.charAt(0).toUpperCase());
+  const sigla = iniciais.join("").slice(0, 3);
+  return sigla.length >= 2 ? sigla : "XXX";
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -309,10 +327,26 @@ Deno.serve(async (req: Request) => {
         ...(codigoPendente ? { codigo_pendente: true } : {}),
       };
 
+      // Fase 12.8 (fix 2) — Colunas NOT NULL adicionadas em fases posteriores
+      // (tipo_curso na Fase 7.1) tambem precisam de fallback quando o form
+      // nao envia. Default pra "pos_graduacao" — o 411 e integralmente
+      // pos, e o form da Fase 7.3 exige que o solicitante escolha um tipo
+      // antes de enviar. Fallback so cobre payloads legados/quebrados.
+      const tipoCurso = (typeof payload.tipo_curso === "string" && payload.tipo_curso.trim() !== "")
+        ? payload.tipo_curso.trim()
+        : "pos_graduacao";
+
+      // Fase 12.8 (fix 3) — sigla tambem eh NOT NULL sem default. Se veio
+      // vazia, gera das iniciais do nome (mesma heuristica da Fase 7.3 S3):
+      // ignora preposicoes/artigos e trava em 3 letras.
+      const siglaInformada = typeof payload.sigla === "string" ? payload.sigla.trim() : "";
+      const sigla = siglaInformada !== "" ? siglaInformada : derivarSigla(payload.nome ?? "");
+
       const { data: cursoIns, error: eCurso } = await sbAdmin.from("cursos").insert({
         tenant_id: solicitacao.tenant_id,
-        codigo, sigla: payload.sigla, escola: payload.escola,
+        codigo, sigla, escola: payload.escola,
         nome: payload.nome,
+        tipo_curso: tipoCurso,
         status: payload.status ?? "em_andamento",
         flags_prontidao: flagsProntidao,
       }).select("id, codigo").single();
