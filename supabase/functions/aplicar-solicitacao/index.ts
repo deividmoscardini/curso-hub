@@ -293,12 +293,28 @@ Deno.serve(async (req: Request) => {
 
     if (solTyped.tipo === "novo_curso") {
       const payload = (solTyped.payload ?? {}) as any;
+
+      // Fase 12.8 — Se o solicitante marcou "aguardando criacao de codigo"
+      // (S2 da Fase 7), payload.codigo chega null e a coluna cursos.codigo
+      // e NOT NULL. Geramos placeholder "PENDENTE-<8chars>" e sinalizamos
+      // com flags_prontidao.codigo_pendente=true — admin substitui depois
+      // via /admin/calendario ou (futuro) integracao com Liceu.
+      const codigoInformado = typeof payload.codigo === "string" && payload.codigo.trim() !== ""
+        ? payload.codigo.trim()
+        : null;
+      const codigoPendente = codigoInformado == null;
+      const codigo = codigoInformado ?? `PENDENTE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const flagsProntidao = {
+        ...(payload.flags_prontidao ?? {}),
+        ...(codigoPendente ? { codigo_pendente: true } : {}),
+      };
+
       const { data: cursoIns, error: eCurso } = await sbAdmin.from("cursos").insert({
         tenant_id: solicitacao.tenant_id,
-        codigo: payload.codigo, sigla: payload.sigla, escola: payload.escola,
+        codigo, sigla: payload.sigla, escola: payload.escola,
         nome: payload.nome,
         status: payload.status ?? "em_andamento",
-        flags_prontidao: payload.flags_prontidao ?? {},
+        flags_prontidao: flagsProntidao,
       }).select("id, codigo").single();
       if (eCurso) return json(500, { error: `Falha ao criar curso: ${eCurso.message}` });
 
@@ -343,6 +359,7 @@ Deno.serve(async (req: Request) => {
 
       logDepois = {
         curso_id: cursoIns.id, codigo: cursoIns.codigo,
+        codigo_pendente: codigoPendente,
         disciplinas: discs.length, ofertas_geradas: linhasGravadas,
       };
     } else if (solTyped.tipo === "reordenar_carrossel") {
