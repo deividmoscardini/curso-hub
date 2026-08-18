@@ -117,6 +117,8 @@ export const pt = {
     filtro_atalho_este_mes: "Este mês",
     filtro_atalho_proximos_30: "Próximos 30 dias",
     filtro_texto_placeholder: "Digite pra filtrar…",
+    filtro_texto_1_correspondencia: "1 correspondência",
+    filtro_texto_n_correspondencias: "{n} correspondências",
     filtro_multi_placeholder: "Selecionar…",
     filtro_multi_buscar: "Buscar…",
     filtro_multi_vazio: "Nada encontrado.",

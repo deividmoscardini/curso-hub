@@ -119,6 +119,8 @@ export const es: Dicionario = {
     filtro_atalho_este_mes: "Este mes",
     filtro_atalho_proximos_30: "Próximos 30 días",
     filtro_texto_placeholder: "Escribí para filtrar…",
+    filtro_texto_1_correspondencia: "1 coincidencia",
+    filtro_texto_n_correspondencias: "{n} coincidencias",
     filtro_multi_placeholder: "Seleccionar…",
     filtro_multi_buscar: "Buscar…",
     filtro_multi_vazio: "Sin resultados.",

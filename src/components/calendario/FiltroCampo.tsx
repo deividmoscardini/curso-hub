@@ -35,13 +35,39 @@ export function FiltroTexto({
   chave,
   valor,
   onChange,
-}: CampoProps & { valor: string; onChange: (v: string) => void }) {
+  correspondencias,
+}: CampoProps & {
+  valor: string;
+  onChange: (v: string) => void;
+  /**
+   * Fase 11.12 — Número de linhas que batem apenas com esse texto (ignorando
+   * outros filtros). Se undefined ou input vazio, nada é mostrado. Se 0,
+   * mostra em cor de alerta pra deixar claro que não achou nada.
+   */
+  correspondencias?: number;
+}) {
   const { t } = useT();
+  const mostrarContador = valor.trim() !== "" && correspondencias != null;
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground">
-        {labelColuna(chave)}
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-muted-foreground">
+          {labelColuna(chave)}
+        </label>
+        {mostrarContador && (
+          <span
+            className={
+              correspondencias === 0
+                ? "text-[10px] font-medium text-destructive"
+                : "text-[10px] text-muted-foreground"
+            }
+          >
+            {correspondencias === 1
+              ? t("calendario.filtro_texto_1_correspondencia")
+              : t("calendario.filtro_texto_n_correspondencias", { n: String(correspondencias) })}
+          </span>
+        )}
+      </div>
       <Input
         value={valor}
         onChange={(e) => onChange(e.target.value)}

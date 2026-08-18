@@ -82,6 +82,27 @@ export function CalendarioFiltrosDrawer({
     return map;
   }, [defs, linhas]);
 
+  // Fase 11.12 — Contador de correspondências por campo de texto,
+  // ignorando os outros filtros. Serve pra o usuário ver, ao digitar,
+  // quantas linhas casam apenas com aquele texto. Contadores só
+  // aparecem quando o input está preenchido (feito no FiltroTexto).
+  const correspondenciasPorChave = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const d of defs) {
+      if (d.tipo !== "texto") continue;
+      const valor = (filtros.textos[d.chave] ?? "").trim();
+      if (valor === "") continue;
+      const query = valor.toLowerCase();
+      let count = 0;
+      for (const linha of linhas) {
+        const raw = linha.dados?.[d.chave];
+        if (raw != null && String(raw).toLowerCase().includes(query)) count++;
+      }
+      map[d.chave] = count;
+    }
+    return map;
+  }, [defs, linhas, filtros.textos]);
+
   const setTexto = (chave: string, v: string) =>
     onChange({ ...filtros, textos: { ...filtros.textos, [chave]: v } });
   const setMulti = (chave: string, v: string[]) =>
@@ -124,6 +145,7 @@ export function CalendarioFiltrosDrawer({
               onChangeNumero={setNumero}
               onChangeData={setData}
               opcoesPorChave={opcoesPorChave}
+              correspondenciasPorChave={correspondenciasPorChave}
               defaultOpen={i === 0}
             />
           ))}
@@ -149,6 +171,7 @@ function SecaoConteudo({
   onChangeNumero,
   onChangeData,
   opcoesPorChave,
+  correspondenciasPorChave,
   defaultOpen,
 }: {
   titulo: string;
@@ -160,6 +183,7 @@ function SecaoConteudo({
   onChangeNumero: (k: string, v: { de?: number; ate?: number }) => void;
   onChangeData: (k: string, v: { de?: string; ate?: string }) => void;
   opcoesPorChave: Record<string, string[]>;
+  correspondenciasPorChave: Record<string, number>;
   defaultOpen: boolean;
 }) {
   const daSecao = defs.filter((d) => d.secao === secao);
@@ -176,6 +200,7 @@ function SecaoConteudo({
               chave={d.chave}
               valor={filtros.textos[d.chave] ?? ""}
               onChange={(v) => onChangeTexto(d.chave, v)}
+              correspondencias={correspondenciasPorChave[d.chave]}
             />
           );
         }
