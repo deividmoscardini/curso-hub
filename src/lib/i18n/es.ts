@@ -347,6 +347,7 @@ export const es: Dicionario = {
     ver_payload_tecnico: "Ver payload técnico",
     ver_payload_tecnico_hint: "solo para auditoría",
     previa_sera_calculada: "La previa se calculará al aprobar.",
+    resumo_ok_hint: "Marca OK después de revisar este campo.",
     ok: "¿OK?",
     disciplina_col: "Asignatura",
     tipo_col: "Tipo",

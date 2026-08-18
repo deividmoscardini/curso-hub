@@ -349,6 +349,7 @@ export const pt = {
     ver_payload_tecnico: "Ver payload técnico",
     ver_payload_tecnico_hint: "só pra auditoria",
     previa_sera_calculada: "A prévia será calculada ao aprovar.",
+    resumo_ok_hint: "Marque OK depois de conferir esse campo.",
     ok: "OK?",
     disciplina_col: "Disciplina",
     tipo_col: "Tipo",

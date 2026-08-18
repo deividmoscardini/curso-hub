@@ -128,10 +128,14 @@ function SolicitacaoDetalhePage() {
 
   // Fase 7 — Analises estruturais visiveis ao aprovador (so em novo_curso)
   const analise = useAnaliseEstrutural(sol);
-  // A8 — Para novo_curso, extrai chaves das disciplinas pra checar se
-  // todas foram marcadas como OK antes de habilitar o botao "Aprovar".
+  // A8 + Fase 12.7 — Para novo_curso, extrai chaves das disciplinas E dos
+  // campos do resumo/cronograma pra checar se todas foram marcadas como
+  // OK antes de habilitar o botao "Aprovar". Client-side only.
   const chavesLinhas = (sol && sol.tipo === "novo_curso")
-    ? ((sol.payload as any)?.disciplinas ?? []).map((d: any, i: number) => `disc-${i}-${d.nome}`)
+    ? [
+        ...chavesResumoCronograma((sol.payload as any) ?? {}),
+        ...((sol.payload as any)?.disciplinas ?? []).map((d: any, i: number) => `disc-${i}-${d.nome}`),
+      ]
     : [];
   const todasLinhasOk = chavesLinhas.length === 0 || chavesLinhas.every((c: string) => linhasOk.has(c));
 
@@ -288,8 +292,17 @@ function SolicitacaoDetalhePage() {
         </Card>
       )}
 
-      {/* Fase 12.3 — Novo curso: cards de resumo e cronograma acima da tabela. */}
-      {sol.tipo === "novo_curso" && <NovoCursoResumo sol={sol} idioma={idioma} />}
+      {/* Fase 12.3 — Novo curso: cards de resumo e cronograma acima da tabela.
+          Fase 12.7 — cada campo com valor tem checkbox de aprovacao. */}
+      {sol.tipo === "novo_curso" && (
+        <NovoCursoResumo
+          sol={sol}
+          idioma={idioma}
+          linhasOk={linhasOk}
+          toggleLinha={toggleLinha}
+          podeDecidir={!!podeDecidir}
+        />
+      )}
 
       {/* A8 — Aprovacao por linha (novo_curso): tabela com checkbox por disciplina */}
       {sol.tipo === "novo_curso" && chavesLinhas.length > 0 && podeDecidir && (
@@ -607,7 +620,15 @@ function AlteracaoDeDataDetalhe({
 // Fase 12.3 — Resumo do curso proposto + cronograma. Mostra os campos
 // que a Bruna reclamou de nao ver na tela do aprovador ("so trouxe as
 // 15 disciplinas").
-function NovoCursoResumo({ sol, idioma }: { sol: SolicitacaoDetalhe; idioma: Idioma }) {
+function NovoCursoResumo({
+  sol, idioma, linhasOk, toggleLinha, podeDecidir,
+}: {
+  sol: SolicitacaoDetalhe;
+  idioma: Idioma;
+  linhasOk: Set<string>;
+  toggleLinha: (chave: string) => void;
+  podeDecidir: boolean;
+}) {
   const { t } = useT();
   const p = (sol.payload ?? {}) as {
     sigla?: string; nome?: string; codigo?: string;
@@ -620,6 +641,7 @@ function NovoCursoResumo({ sol, idioma }: { sol: SolicitacaoDetalhe; idioma: Idi
     disciplinas?: Array<{ ch?: number }>;
   };
   const chTotal = (p.disciplinas ?? []).reduce((s, d) => s + (d.ch ?? 0), 0);
+  const propsOk = { linhasOk, toggleLinha, podeDecidir };
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card>
@@ -627,17 +649,21 @@ function NovoCursoResumo({ sol, idioma }: { sol: SolicitacaoDetalhe; idioma: Idi
           <CardTitle className="text-base">{t("solicitacao_detalhe.resumo_curso_titulo")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1.5 text-sm">
-          <LinhaResumo label={t("solicitacao_nova.sigla")} valor={p.sigla} />
-          <LinhaResumo label={t("solicitacao_nova.nome_curso")} valor={p.nome} />
-          <LinhaResumo label={t("solicitacao_nova.codigo_curso")} valor={p.codigo} />
+          <LinhaResumo label={t("solicitacao_nova.sigla")} valor={p.sigla} chaveOk="resumo:sigla" {...propsOk} />
+          <LinhaResumo label={t("solicitacao_nova.nome_curso")} valor={p.nome} chaveOk="resumo:nome" {...propsOk} />
+          <LinhaResumo label={t("solicitacao_nova.codigo_curso")} valor={p.codigo} chaveOk="resumo:codigo" {...propsOk} />
           <LinhaResumo
             label={t("solicitacao_nova.tipo_curso")}
             valor={p.tipo_curso ? TIPO_CURSO_LABEL[p.tipo_curso] : null}
+            chaveOk="resumo:tipo"
+            {...propsOk}
           />
-          <LinhaResumo label={t("solicitacao_nova.escola")} valor={p.escola} />
+          <LinhaResumo label={t("solicitacao_nova.escola")} valor={p.escola} chaveOk="resumo:escola" {...propsOk} />
           <LinhaResumo
             label={t("solicitacao_detalhe.ch_total_lbl_curto")}
             valor={chTotal > 0 ? `${chTotal}h` : null}
+            chaveOk="resumo:ch_total"
+            {...propsOk}
           />
         </CardContent>
       </Card>
@@ -647,23 +673,58 @@ function NovoCursoResumo({ sol, idioma }: { sol: SolicitacaoDetalhe; idioma: Idi
           <CardDescription>{t("solicitacao_detalhe.cronograma_desc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-1.5 text-sm">
-          <LinhaResumo label={t("solicitacao_nova.ano_estreia")} valor={p.ano_estreia?.toString()} />
+          <LinhaResumo
+            label={t("solicitacao_nova.ano_estreia")}
+            valor={p.ano_estreia?.toString()}
+            chaveOk="cronograma:ano_estreia"
+            {...propsOk}
+          />
           <LinhaResumo
             label={t("solicitacao_detalhe.primeira_captacao")}
             valor={p.captacao_inicio_e1 ? formatarData(p.captacao_inicio_e1, idioma) : null}
+            chaveOk="cronograma:1a_captacao"
+            {...propsOk}
           />
           <LinhaResumo
             label={t("solicitacao_detalhe.inicio_aulas")}
             valor={p.data_inicio_e1 ? formatarData(p.data_inicio_e1, idioma) : null}
+            chaveOk="cronograma:inicio_aulas"
+            {...propsOk}
           />
           <LinhaResumo
             label={t("solicitacao_detalhe.segunda_captacao")}
             valor={p.captacao_inicio_e2 ? formatarData(p.captacao_inicio_e2, idioma) : null}
+            chaveOk="cronograma:2a_captacao"
+            {...propsOk}
           />
         </CardContent>
       </Card>
     </div>
   );
+}
+
+/**
+ * Fase 12.7 — Chaves de aprovacao pros campos do resumo/cronograma
+ * que estao preenchidos. Espelha o que `NovoCursoResumo` renderiza —
+ * se mudar la, mudar aqui. Campos com valor nulo/vazio NAO entram
+ * (aprovador nao precisa marcar OK em "—").
+ */
+function chavesResumoCronograma(payload: Record<string, unknown>): string[] {
+  const chaves: string[] = [];
+  const has = (v: unknown) => v != null && String(v).trim() !== "";
+  if (has(payload.sigla))               chaves.push("resumo:sigla");
+  if (has(payload.nome))                chaves.push("resumo:nome");
+  if (has(payload.codigo))              chaves.push("resumo:codigo");
+  if (has(payload.tipo_curso))          chaves.push("resumo:tipo");
+  if (has(payload.escola))              chaves.push("resumo:escola");
+  const disciplinas = payload.disciplinas as Array<{ ch?: number }> | undefined;
+  const chTotal = (disciplinas ?? []).reduce((s, d) => s + (d.ch ?? 0), 0);
+  if (chTotal > 0)                      chaves.push("resumo:ch_total");
+  if (has(payload.ano_estreia))         chaves.push("cronograma:ano_estreia");
+  if (has(payload.captacao_inicio_e1))  chaves.push("cronograma:1a_captacao");
+  if (has(payload.data_inicio_e1))      chaves.push("cronograma:inicio_aulas");
+  if (has(payload.captacao_inicio_e2))  chaves.push("cronograma:2a_captacao");
+  return chaves;
 }
 
 // Fase 12.2 — Diff visual de datas: valor anterior em cinza riscado,
@@ -688,11 +749,35 @@ function DiffData({
   );
 }
 
-function LinhaResumo({ label, valor }: { label: string; valor: string | null | undefined }) {
+function LinhaResumo({
+  label, valor, chaveOk, linhasOk, toggleLinha, podeDecidir,
+}: {
+  label: string;
+  valor: string | null | undefined;
+  chaveOk?: string;
+  linhasOk?: Set<string>;
+  toggleLinha?: (chave: string) => void;
+  podeDecidir?: boolean;
+}) {
+  const { t } = useT();
+  const temValor = !!valor?.toString().trim();
+  const mostrarCheckbox = !!chaveOk && temValor && !!podeDecidir && !!linhasOk && !!toggleLinha;
+  const ok = mostrarCheckbox ? linhasOk!.has(chaveOk!) : false;
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{valor?.toString().trim() || "—"}</span>
+    <div className={`flex items-center justify-between gap-3 rounded px-1 py-0.5 ${ok ? "bg-emerald-500/5" : ""}`}>
+      <div className="flex items-center gap-2">
+        {mostrarCheckbox && (
+          <input
+            type="checkbox"
+            checked={ok}
+            onChange={() => toggleLinha!(chaveOk!)}
+            aria-label={t("solicitacao_detalhe.resumo_ok_hint")}
+            title={t("solicitacao_detalhe.resumo_ok_hint")}
+          />
+        )}
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      </div>
+      <span className="text-right font-medium">{temValor ? valor : "—"}</span>
     </div>
   );
 }
