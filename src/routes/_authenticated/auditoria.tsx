@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollText } from "lucide-react";
 import { useT } from "@/contexts/i18n";
+import { formatarDataHora } from "@/lib/formatar-data";
 
 export const Route = createFileRoute("/_authenticated/auditoria")({
   head: () => ({ meta: [{ title: "Auditoria — Calendário +A" }] }),
@@ -31,7 +32,7 @@ interface LogRow {
 
 function AuditoriaPage() {
   const { perfil } = useTenant();
-  const { t } = useT();
+  const { t, idioma } = useT();
   const [filtroAcao, setFiltroAcao] = useState("");
   const [filtroEntidade, setFiltroEntidade] = useState<string>("");
 
@@ -129,7 +130,7 @@ function AuditoriaPage() {
                 <tbody>
                   {filtrados.map((l) => (
                     <tr key={l.id} className="border-t hover:bg-muted/20">
-                      <td className="p-2 text-xs">{new Date(l.criado_em).toLocaleString()}</td>
+                      <td className="p-2 text-xs">{formatarDataHora(l.criado_em, idioma)}</td>
                       <td className="p-2 text-xs">
                         {l.ator ? (
                           <>

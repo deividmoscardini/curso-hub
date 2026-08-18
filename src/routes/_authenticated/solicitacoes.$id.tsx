@@ -12,6 +12,7 @@ import { ArrowLeft, Loader2, Check, X, RotateCcw, AlertTriangle, Copy, TrendingU
 import { acharSimilar } from "@/lib/similaridade";
 import { validarChMinima, TIPO_CURSO_LABEL, type TipoCurso } from "@/lib/regras-tipo-curso";
 import { useT } from "@/contexts/i18n";
+import { formatarDataHora } from "@/lib/formatar-data";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/$id")({
   head: () => ({ meta: [{ title: "Solicitação — Calendário +A" }] }),
@@ -55,7 +56,7 @@ function SolicitacaoDetalhePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { perfil, papel } = useTenant();
-  const { t } = useT();
+  const { t, idioma } = useT();
   const STATUS_LABEL_LOCAL: Record<string, string> = {
     pendente: t("solicitacao_detalhe.status_pendente"),
     em_revisao: t("solicitacao_detalhe.status_pendente"),
@@ -147,7 +148,7 @@ function SolicitacaoDetalhePage() {
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            {sol.tenants?.nome} · {t("solicitacao_detalhe.pedido_por", { nome: sol.solicitante?.nome ?? "", data: new Date(sol.criado_em).toLocaleString() })}
+            {sol.tenants?.nome} · {t("solicitacao_detalhe.pedido_por", { nome: sol.solicitante?.nome ?? "", data: formatarDataHora(sol.criado_em, idioma) })}
           </p>
         </div>
         {podeDecidir && (
@@ -364,9 +365,9 @@ function SolicitacaoDetalhePage() {
         <CardHeader><CardTitle className="text-base">{t("solicitacao_detalhe.timeline")}</CardTitle></CardHeader>
         <CardContent>
           <ul className="space-y-1 text-sm">
-            <li>{t("solicitacao_detalhe.criado_em_txt", { data: new Date(sol.criado_em).toLocaleString() })}</li>
-            {sol.aprovado_em && <li>{t("solicitacao_detalhe.aprovado_em_txt", { data: new Date(sol.aprovado_em).toLocaleString() })}</li>}
-            {sol.aplicado_em && <li>{t("solicitacao_detalhe.aplicado_em_txt", { data: new Date(sol.aplicado_em).toLocaleString() })}</li>}
+            <li>{t("solicitacao_detalhe.criado_em_txt", { data: formatarDataHora(sol.criado_em, idioma) })}</li>
+            {sol.aprovado_em && <li>{t("solicitacao_detalhe.aprovado_em_txt", { data: formatarDataHora(sol.aprovado_em, idioma) })}</li>}
+            {sol.aplicado_em && <li>{t("solicitacao_detalhe.aplicado_em_txt", { data: formatarDataHora(sol.aplicado_em, idioma) })}</li>}
           </ul>
         </CardContent>
       </Card>

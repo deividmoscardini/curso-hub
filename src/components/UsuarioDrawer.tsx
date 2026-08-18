@@ -11,6 +11,7 @@ import { Link } from "@tanstack/react-router";
 import { PAPEIS_APROVACAO, labelPapel } from "@/lib/papel-labels";
 import type { PapelTenant } from "@/contexts/tenant";
 import { useT } from "@/contexts/i18n";
+import { formatarData } from "@/lib/formatar-data";
 
 // Fase 6.M3 — Painel lateral pra editar rapidamente um usuario aprovado
 // sem sair da lista. Mostra dados, papel atual, e permite: mudar papel,
@@ -28,7 +29,7 @@ interface LogRow { id: string; acao: string; motivo: string | null; criado_em: s
 
 export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const { t } = useT();
+  const { t, idioma } = useT();
 
   const { data: perfil } = useQuery({
     queryKey: ["drawer-usuario", perfilId],
@@ -119,7 +120,7 @@ export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose
             </div>
             <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
               <span>{t("admin_usuarios.aprovado_em_lbl")}</span>
-              <span>{perfil.aprovado_em ? new Date(perfil.aprovado_em).toLocaleDateString() : "—"}</span>
+              <span>{formatarData(perfil.aprovado_em, idioma)}</span>
             </div>
           </div>
 
@@ -155,7 +156,7 @@ export function UsuarioDrawer({ perfilId, onClose }: { perfilId: string; onClose
               <ul className="space-y-1.5 text-xs">
                 {logs?.map((l) => (
                   <li key={l.id} className="flex items-start gap-2">
-                    <span className="text-muted-foreground">{new Date(l.criado_em).toLocaleDateString()}</span>
+                    <span className="text-muted-foreground">{formatarData(l.criado_em, idioma)}</span>
                     <span className="font-mono">{l.acao}</span>
                     {l.motivo && <span className="text-muted-foreground italic">— {l.motivo}</span>}
                   </li>

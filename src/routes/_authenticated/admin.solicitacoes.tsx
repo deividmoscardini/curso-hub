@@ -6,6 +6,7 @@ import { useTenant } from "@/contexts/tenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/contexts/i18n";
+import { formatarData, formatarDataHora } from "@/lib/formatar-data";
 
 export const Route = createFileRoute("/_authenticated/admin/solicitacoes")({
   head: () => ({ meta: [{ title: "Solicitações — Admin" }] }),
@@ -45,7 +46,7 @@ const STATUS_CLS: Record<StatusSolicitacao, string> = {
 
 function AdminSolicitacoesPage() {
   const { perfil } = useTenant();
-  const { t } = useT();
+  const { t, idioma } = useT();
   const STATUS_LABEL_LOCAL: Record<StatusSolicitacao, string> = {
     pendente: t("solicitacao_detalhe.status_pendente"),
     em_revisao: t("solicitacao_detalhe.status_pendente"),
@@ -162,7 +163,7 @@ function AdminSolicitacoesPage() {
                   <tr><td colSpan={8} className="p-6 text-center text-sm text-muted-foreground">{t("admin_solicitacoes.sem_solicitacoes")}</td></tr>
                 ) : filtradas.map((s) => (
                   <tr key={s.id} className="border-t hover:bg-muted/20">
-                    <td className="p-2 text-xs">{new Date(s.criado_em).toLocaleString()}</td>
+                    <td className="p-2 text-xs">{formatarDataHora(s.criado_em, idioma)}</td>
                     <td className="p-2 text-xs">
                       <div className="font-medium">{s.solicitante?.nome ?? "?"}</div>
                       <div className="text-[10px] text-muted-foreground">{s.solicitante?.email}</div>
@@ -176,7 +177,7 @@ function AdminSolicitacoesPage() {
                       </span>
                     </td>
                     <td className="p-2 text-xs text-muted-foreground">
-                      {s.aprovado_em ? new Date(s.aprovado_em).toLocaleDateString() : "—"}
+                      {s.aprovado_em ? formatarData(s.aprovado_em, idioma) : "—"}
                     </td>
                     <td className="p-2 text-right">
                       <Button asChild size="sm" variant="ghost">

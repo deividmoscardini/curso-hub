@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useT } from "@/contexts/i18n";
+import { formatarDataHora } from "@/lib/formatar-data";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios/$id")({
   head: () => ({ meta: [{ title: "Detalhe do usuário — Admin" }] }),
@@ -30,7 +31,7 @@ interface LogRow {
 function DetalheUsuarioPage() {
   const { id } = Route.useParams();
   const { perfil: atual } = useTenant();
-  const { t } = useT();
+  const { t, idioma } = useT();
 
   const { data: perfil } = useQuery({
     queryKey: ["admin-usuario", id],
@@ -98,9 +99,9 @@ function DetalheUsuarioPage() {
           <CardContent className="space-y-2 text-sm">
             <Linha label={t("admin_usuarios.coluna_status")}><StatusBadge status={perfil.status} /></Linha>
             <Linha label={t("admin_usuarios.admin_global_lbl")}>{perfil.admin_global ? t("comum.sim") : t("comum.nao")}</Linha>
-            <Linha label={t("admin_usuarios.cadastrado_em")}>{new Date(perfil.criado_em).toLocaleString()}</Linha>
+            <Linha label={t("admin_usuarios.cadastrado_em")}>{formatarDataHora(perfil.criado_em, idioma)}</Linha>
             {perfil.aprovado_em && (
-              <Linha label={t("admin_usuarios.aprovado_em_lbl")}>{new Date(perfil.aprovado_em).toLocaleString()}</Linha>
+              <Linha label={t("admin_usuarios.aprovado_em_lbl")}>{formatarDataHora(perfil.aprovado_em, idioma)}</Linha>
             )}
             {perfil.motivo_rejeicao && (
               <Linha label={t("admin_usuarios.motivo_rejeicao_col")}><span className="text-rose-600">{perfil.motivo_rejeicao}</span></Linha>
@@ -152,7 +153,7 @@ function DetalheUsuarioPage() {
                 <tbody>
                   {logs?.map((l) => (
                     <tr key={l.id} className="border-t">
-                      <td className="p-2 text-xs">{new Date(l.criado_em).toLocaleString()}</td>
+                      <td className="p-2 text-xs">{formatarDataHora(l.criado_em, idioma)}</td>
                       <td className="p-2 font-mono text-xs">{l.acao}</td>
                       <td className="p-2 text-xs text-muted-foreground">{l.entidade ?? "—"}</td>
                       <td className="p-2 text-xs text-muted-foreground">{l.motivo ?? "—"}</td>

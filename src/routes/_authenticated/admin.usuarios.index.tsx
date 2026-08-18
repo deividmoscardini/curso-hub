@@ -15,6 +15,7 @@ import { UsuarioDrawer } from "@/components/UsuarioDrawer";
 import { labelPapel } from "@/lib/papel-labels";
 import type { PapelTenant } from "@/contexts/tenant";
 import { useT } from "@/contexts/i18n";
+import { formatarData } from "@/lib/formatar-data";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios/")({
   head: () => ({ meta: [{ title: "Usuários — Admin" }] }),
@@ -39,7 +40,7 @@ interface MembroLinha {
 
 function AdminUsuariosPage() {
   const { perfil: atual } = useTenant();
-  const { t } = useT();
+  const { t, idioma } = useT();
   const [rejeitando, setRejeitando] = useState<Perfil | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
 
@@ -139,7 +140,7 @@ function AdminUsuariosPage() {
                         )}
                       </td>
                       <td className="p-2 text-xs text-muted-foreground">
-                        {new Date(u.criado_em).toLocaleDateString()}
+                        {formatarData(u.criado_em, idioma)}
                       </td>
                       <td className="p-2" onClick={(e) => e.stopPropagation()}>
                         {isPendente ? (

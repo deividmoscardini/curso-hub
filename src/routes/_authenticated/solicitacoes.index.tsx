@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Inbox } from "lucide-react";
 import { useT } from "@/contexts/i18n";
+import { formatarDataHora } from "@/lib/formatar-data";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/")({
   head: () => ({ meta: [{ title: "Solicitações — Calendário +A" }] }),
@@ -38,7 +39,7 @@ const STATUS_CLS: Record<string, string> = {
 
 function SolicitacoesListaPage() {
   const { tenantId } = useTenant();
-  const { t } = useT();
+  const { t, idioma } = useT();
   const STATUS_LABEL_LOCAL: Record<string, string> = {
     pendente: t("solicitacao_detalhe.status_pendente"),
     em_revisao: t("solicitacao_detalhe.status_pendente"),
@@ -101,7 +102,7 @@ function SolicitacoesListaPage() {
                 <tbody>
                   {solicitacoes?.map((s) => (
                     <tr key={s.id} className="border-t hover:bg-muted/20">
-                      <td className="p-2 text-xs">{new Date(s.criado_em).toLocaleString()}</td>
+                      <td className="p-2 text-xs">{formatarDataHora(s.criado_em, idioma)}</td>
                       <td className="p-2 text-xs">{s.solicitante?.nome ?? "—"}</td>
                       <td className="p-2 text-xs capitalize">{s.tipo.replace(/_/g, " ")}</td>
                       <td className="p-2 text-xs">{s.aba ?? "—"}</td>

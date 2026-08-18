@@ -20,6 +20,7 @@ import {
   encodeFiltros,
   type FiltrosEstado,
 } from "@/lib/calendario-filtros";
+import { formatarDataHora } from "@/lib/formatar-data";
 import { CalendarioFiltrosDrawer } from "@/components/calendario/CalendarioFiltrosDrawer";
 import { FiltroChips } from "@/components/calendario/FiltroChips";
 
@@ -368,7 +369,7 @@ function formatarCelula(chave: string, v: unknown): string {
 
 // Fase 8 — Badge + popover mostrando histórico de alterações da linha.
 function HistoricoBadge({ eventos }: { eventos: EventoComentario[] }) {
-  const { t } = useT();
+  const { t, idioma } = useT();
   const ultimos = [...eventos].sort((a, b) => b.criado_em.localeCompare(a.criado_em));
   return (
     <Popover>
@@ -392,7 +393,7 @@ function HistoricoBadge({ eventos }: { eventos: EventoComentario[] }) {
           {ultimos.map((ev, i) => (
             <li key={i} className="p-3 text-xs">
               <div className="flex items-center justify-between text-muted-foreground">
-                <span className="font-mono">{new Date(ev.criado_em).toLocaleString()}</span>
+                <span className="font-mono">{formatarDataHora(ev.criado_em, idioma)}</span>
                 {ev.tipo && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{ev.tipo}</span>}
               </div>
               {ev.campo_alterado && (
