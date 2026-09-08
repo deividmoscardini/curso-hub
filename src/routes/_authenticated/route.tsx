@@ -260,7 +260,7 @@ function AuthenticatedLayout() {
             </SidebarFooter>
           </Sidebar>
 
-          <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col min-w-0">
             <header className="flex h-12 items-center justify-between gap-2 border-b bg-background px-4">
               <div className="flex items-center gap-2">
                 <SidebarTrigger />
@@ -280,7 +280,7 @@ function AuthenticatedLayout() {
               </div>
               <SeletorIdioma />
             </header>
-            <main className="flex-1 overflow-auto bg-muted/20 p-6">
+            <main className="flex-1 min-w-0 overflow-auto bg-muted/20 p-6">
               <Outlet />
             </main>
           </div>
