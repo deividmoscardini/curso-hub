@@ -417,7 +417,6 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
           ch: typeof chRaw === "number" ? chRaw : parseInt(String(chRaw), 10) || 20,
           tipo_oferta: (tipoRaw.startsWith("c") ? "C" : "A") as "A" | "C",
           tem_pre_requisito: /^(sim|s|true|1|yes|y)/i.test(preRaw),
-        };
       }).filter((d) => d.nome.length > 0);
       if (parsed.length === 0) {
         toast.error(t("solicitacao_nova.arquivo_invalido"), { description: t("solicitacao_nova.baixe_template") });
@@ -601,6 +600,16 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
         <div className="mt-4 rounded-md border p-3">
           <div className="mb-2 font-medium text-sm">{t("solicitacao_nova.bloco_ofertas")}</div>
           <p className="mb-3 text-xs text-muted-foreground">{t("solicitacao_nova.bloco_ofertas_desc")}</p>
+          {/* Fase QA 2026-09 (issue 10) — Sem esse bloco preenchido, o curso é
+              criado mas fica com zero linhas em calendario_linhas e não aparece
+              no calendário — e hoje não existe um tipo de solicitação pra gerar
+              essas ofertas depois. Aviso visível pra evitar o "curso sumido". */}
+          {!gerarOfertas && (
+            <div className="mb-3 flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{t("solicitacao_nova.bloco_ofertas_aviso_vazio")}</span>
+            </div>
+          )}
           <div className="grid gap-3 md:grid-cols-3">
             {/* (a) Ano de lançamento */}
             <Campo label={t("solicitacao_nova.ano_lancamento")}>
