@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Edge Function: aplicar-solicitacao (v2)
  *
  * Registra a decisão do aprovador (aprovar / rejeitar / devolver) e, em
@@ -25,6 +25,7 @@
  * aprovador cascateando via solicitação, então precisamos bypassar.
  */
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { weekday } from "../_shared/feriados.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -36,6 +37,25 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/**
+ * Fase QA 2026-09 (issue 8) — Rótulo de dia da semana em PT-BR maiúsculo,
+ * mesma convenção usada em `_shared/regras.ts` ("QUARTA-FEIRA",
+ * "QUINTA-FEIRA") ao gerar a prévia original. Usado pra recalcular
+ * "DIA DA SEMANA DA LIVE" quando o admin move a data de uma live via
+ * alterar_data_live — sem isso o rótulo ficava desatualizado/errado em
+ * relação à nova data.
+ */
+function labelDiaSemana(dataISO: string): string {
+  const nomes = ["DOMINGO", "SEGUNDA-FEIRA", "TERÇA-FEIRA", "QUARTA-FEIRA", "QUINTA-FEIRA", "SEXTA-FEIRA", "SÁBADO"];
+  return nomes[weekday(dataISO)];
+}
+
+/**
+ * Fase 12.8 — Deriva sigla de 3 letras a partir do nome do curso.
+ * Espelha a heuristica da Fase 7.3 S3 (front): ignora preposicoes/artigos
+ * PT-BR e trava em 3 letras maiusculas. Usado so como fallback quando o
+ * form nao envia sigla explicita.
+ */
 /**
  * Fase 12.8 — Deriva sigla de 3 letras a partir do nome do curso.
  * Espelha a heuristica da Fase 7.3 S3 (front): ignora preposicoes/artigos
@@ -526,6 +546,27 @@ Deno.serve(async (req: Request) => {
             ? { valor_anterior: resTermino.valor_anterior, valor_novo: payload.novo_termino_disciplina }
             : { erro: resTermino.erro },
           atividade_propagada: resAtividade.ok,
+        };
+      }
+
+      // Fase QA 2026-09 (issue 8) — Após mudar a data de uma live, o rótulo
+      // "DIA DA SEMANA DA LIVE" (dia da semana em que a live cai) ficava
+      // parado com o valor antigo. Recalcula a partir da nova_data e grava
+      // na mesma linha, junto do mesmo solicitacao_id.
+      if (solTyped.tipo === "alterar_data_live") {
+        const novoDiaSemana = labelDiaSemana(payload.nova_data);
+        const resDiaSemana = await aplicarMudancaEmLinha(sbAdmin, {
+          tenant_id: solicitacao.tenant_id,
+          chave_natural: payload.chave_natural,
+          campo: "DIA DA SEMANA DA LIVE",
+          novo_valor: novoDiaSemana,
+          motivo: `${payload.motivo} (recálculo automático: dia da semana da live)`,
+          solicitacao_id: solicitacao.id,
+          autor_id: userId,
+        });
+        logDepois = {
+          ...logDepois,
+          dia_semana_live_recalculado: resDiaSemana.ok ? novoDiaSemana : { erro: resDiaSemana.erro },
         };
       }
 
