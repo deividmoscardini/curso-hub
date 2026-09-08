@@ -30,6 +30,8 @@ interface Props {
 // Detecta campo de data (heurística): valor string ISO YYYY-MM-DD ou
 // chave contendo DATA/LIVE/QUESTIONÁRIO/CAPTAÇÃO.
 function ehCampoDeData(chave: string, valor: unknown): boolean {
+  // "DIA DA SEMANA..." guarda texto (ex.: quarta-feira), nunca data — checar ANTES do "LIVE" abaixo, que bateria em "DIA DA SEMANA DA LIVE".
+    if (chave.toUpperCase().includes("DIA DA SEMANA")) return false;
   const upper = chave.toUpperCase();
   if (upper.includes("DATA") || upper.includes("LIVE") || upper.includes("QUESTIONÁRIO") || upper.includes("CAPTAÇÃO")) {
     return true;
