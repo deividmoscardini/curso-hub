@@ -13,6 +13,14 @@
 // - Cada resultado mostra o período (início → fim) ao lado do
 //   código pra ajudar o usuário a identificar a turma certa quando
 //   existem múltiplas homônimas em anos diferentes.
+//
+// Fase QA 2026-09 (issue 6) — Resultados eram ordenados "ativas
+// primeiro, depois ano decrescente" e cortados em 30. Como o ano mais
+// recente sozinho já passa de 30 casamentos pra buscas comuns (ex.:
+// "ética" tinha 61 linhas só em 2028), os 30 primeiros eram sempre do
+// ano mais novo — turmas ativas de 2026/2027 nunca apareciam. Subiu o
+// corte pra 300 (a lista já tem rolagem própria) até cobrir qualquer
+// busca real sem esconder anos anteriores.
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -108,7 +116,7 @@ export function SeletorCodigoTurma({
         return b.ano - a.ano;
       });
 
-      setCandidatos(filtradas.slice(0, 30));
+      setCandidatos(filtradas.slice(0, 300));
       setCarregando(false);
     }, 250);
     return () => {
