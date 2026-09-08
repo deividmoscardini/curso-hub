@@ -56,12 +56,6 @@ function labelDiaSemana(dataISO: string): string {
  * PT-BR e trava em 3 letras maiusculas. Usado so como fallback quando o
  * form nao envia sigla explicita.
  */
-/**
- * Fase 12.8 — Deriva sigla de 3 letras a partir do nome do curso.
- * Espelha a heuristica da Fase 7.3 S3 (front): ignora preposicoes/artigos
- * PT-BR e trava em 3 letras maiusculas. Usado so como fallback quando o
- * form nao envia sigla explicita.
- */
 function derivarSigla(nome: string): string {
   const stop = new Set(["de", "da", "do", "das", "dos", "e", "a", "o", "as", "os", "em", "para", "com"]);
   const iniciais = nome
