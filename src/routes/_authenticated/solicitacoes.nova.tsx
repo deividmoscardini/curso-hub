@@ -417,7 +417,8 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
           ch: typeof chRaw === "number" ? chRaw : parseInt(String(chRaw), 10) || 20,
           tipo_oferta: (tipoRaw.startsWith("c") ? "C" : "A") as "A" | "C",
           tem_pre_requisito: /^(sim|s|true|1|yes|y)/i.test(preRaw),
-      }).filter((d) => d.nome.length > 0);
+              };
+}).filter((d) => d.nome.length > 0);
       if (parsed.length === 0) {
         toast.error(t("solicitacao_nova.arquivo_invalido"), { description: t("solicitacao_nova.baixe_template") });
         return;
