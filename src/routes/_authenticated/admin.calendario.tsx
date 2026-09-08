@@ -30,6 +30,7 @@ import {
 } from "@/lib/calendario-filtros";
 import { CalendarioFiltrosDrawer } from "@/components/calendario/CalendarioFiltrosDrawer";
 import { FiltroChips } from "@/components/calendario/FiltroChips";
+import { CAMPO } from "@/components/SeletorCodigoTurma";
 
 type Aba = "disciplinas" | "projeto_aplicacao" | "prova_substitutiva" | "fechamento";
 
@@ -163,8 +164,11 @@ function AdminCalendarioPage() {
     let l: LinhaEditavel[] = linhas ?? [];
     if (busca.trim()) {
       const q = busca.trim().toLowerCase();
+      // Fase QA 2026-09 — busca restrita a código da turma, disciplina e
+      // curso (não mais o jsonb inteiro), que fazia a busca "achar" a
+      // turma errada ao casar com datas, comentários e outros campos.
       l = l.filter((r) => {
-        const blob = JSON.stringify(r.dados).toLowerCase();
+        const blob = `${CAMPO.codigoTurma(r.dados)} ${CAMPO.disciplina(r.dados)} ${CAMPO.curso(r.dados)}`.toLowerCase();
         return blob.includes(q) || r.chave_natural.toLowerCase().includes(q);
       });
     }
