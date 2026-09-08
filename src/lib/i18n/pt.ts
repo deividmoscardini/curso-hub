@@ -191,6 +191,7 @@ export const pt = {
     ch_falta: "Faltam {n}h ({tipo} exige mínimo {minimo}h). Ajuste as disciplinas antes de enviar.",
     bloco_ofertas: "Gerar ofertas do 1º ano",
     bloco_ofertas_desc: "Preencha pra o motor calcular e cadastrar as 16 entradas do ano de lançamento junto com o curso. Deixe em branco pra criar só o cadastro do curso.",
+    bloco_ofertas_aviso_vazio: "Este bloco está em branco: o curso será criado, mas não vai aparecer no calendário até que essas ofertas sejam geradas. Hoje não há como gerar ofertas depois — fale com o time do calendário se precisar disso mais tarde.",
     ano_lancamento: "Ano de lançamento",
     dia_semana_live: "Dia da semana da live",
     semana_live: "Semana da live",
