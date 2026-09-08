@@ -191,6 +191,7 @@ export const es: Dicionario = {
     ch_falta: "Faltan {n}h ({tipo} exige mínimo {minimo}h). Ajusta las asignaturas antes de enviar.",
     bloco_ofertas: "Generar ofertas del 1er año",
     bloco_ofertas_desc: "Completa para que el motor calcule y registre las 16 entradas del año de lanzamiento junto con el curso. Deja en blanco para crear solo el registro del curso.",
+    bloco_ofertas_aviso_vazio: "Este bloque está en blanco: el curso se creará, pero no aparecerá en el calendario hasta que se generen esas ofertas. Hoy no hay forma de generar ofertas después — contacta al equipo del calendario si lo necesitas más adelante.",
     ano_lancamento: "Año de lanzamiento",
     dia_semana_live: "Día de la semana de la live",
     semana_live: "Semana de la live",
