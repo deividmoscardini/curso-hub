@@ -25,7 +25,14 @@
  * aprovador cascateando via solicitação, então precisamos bypassar.
  */
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { weekday } from "../_shared/feriados.ts";
+
+// Fase 12.15 — Inline do weekday do `_shared/feriados.ts` pra evitar
+// que o deploy precise inclir mais um arquivo. Assinatura identica:
+// retorna 0=domingo ... 6=sabado (equivalente a Date.getUTCDay).
+function weekday(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
