@@ -112,7 +112,12 @@ function CalendarioPage() {
         .select("id, aba, ano, ordem, chave_natural, dados, conflitos, comentarios, curso_id")
         .eq("tenant_id", tenantId)
         .eq("aba", aba)
+        // Fase 12.19 — ordenar por codigo do curso (jsonb) e depois por
+        // sequencia de captacao (`ordem`). Bruna: "a ordem de apresentacao
+        // sempre pela ordem numerica do curso, seguido pela sequencia de
+        // captacao". Vale para as 4 abas.
         .order("ano", { ascending: true })
+        .order("dados->>CÓD CURSO", { ascending: true })
         .order("ordem", { ascending: true })
         .limit(2000);
       if (error) throw error;
@@ -188,22 +193,26 @@ function CalendarioPage() {
         </div>
       </div>
 
-      {/* Fase 12.13 — Cards KPI responsivos: 2 col em tablet, 4 em desktop.
-          Antes era 1 col em mobile, 4 direto em md (quebrava o layout em
-          telas 768-1024). */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {/* Fase 12.22 — Cards KPI em barra compacta (antes ocupavam ~180px de
+          altura com 4 cards grandes, comprometendo scroll em notebooks). Agora
+          uma unica linha com nome + contador inline. */}
+      <div className="flex flex-wrap gap-2 rounded-md border bg-background px-3 py-2">
         {(Object.keys(ABA_LABEL_LOCAL) as Aba[]).map((a) => (
-          <Card key={a} className={aba === a ? "border-primary" : ""}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{ABA_LABEL_LOCAL[a]}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">
-                {(totais?.[a] ?? 0).toLocaleString()}
-              </div>
-              <div className="text-[10px] text-muted-foreground">{t("calendario.linhas")}</div>
-            </CardContent>
-          </Card>
+          <button
+            key={a}
+            type="button"
+            onClick={() => setAba(a)}
+            className={`flex items-center gap-2 rounded px-2 py-1 text-xs transition ${
+              aba === a ? "bg-primary/10 text-primary" : "hover:bg-muted"
+            }`}
+          >
+            <span className="font-medium">{ABA_LABEL_LOCAL[a]}</span>
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+              aba === a ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+            }`}>
+              {(totais?.[a] ?? 0).toLocaleString()}
+            </span>
+          </button>
         ))}
       </div>
 
@@ -272,17 +281,11 @@ function CalendarioPage() {
           <table className="min-w-max text-sm">
             <thead className="sticky top-0 z-20 bg-muted/95 text-left text-xs uppercase text-muted-foreground backdrop-blur">
               <tr>
-                {/* Fase 11.8 — primeira coluna canonica ja e ANO e vira sticky-left,
-                    sem coluna sticky separada pra evitar duplicacao. */}
-                {colunas.map((c, i) => (
-                  <th
-                    key={c}
-                    className={
-                      i === 0
-                        ? "sticky left-0 z-30 whitespace-nowrap bg-muted/95 p-2"
-                        : "whitespace-nowrap p-2"
-                    }
-                  >
+                {/* Fase 12.18 — Nenhuma coluna eh sticky-left. Bruna: "ao rolar
+                    a barra pra direita o ANO fica fixo, precisamos que ele
+                    acompanhe a rolagem". Todas as colunas rolam junto agora. */}
+                {colunas.map((c) => (
+                  <th key={c} className="whitespace-nowrap p-2">
                     {labelColuna(c)}
                   </th>
                 ))}
@@ -297,15 +300,8 @@ function CalendarioPage() {
                 const eventos = Array.isArray(l.comentarios) ? l.comentarios : [];
                 return (
                   <tr key={l.id} className="border-t hover:bg-muted/20">
-                    {colunas.map((c, i) => (
-                      <td
-                        key={c}
-                        className={
-                          i === 0
-                            ? "sticky left-0 z-10 whitespace-nowrap bg-background p-2 font-medium"
-                            : "whitespace-nowrap p-2"
-                        }
-                      >
+                    {colunas.map((c) => (
+                      <td key={c} className="whitespace-nowrap p-2">
                         {formatarCelula(c, l.dados[c])}
                       </td>
                     ))}
@@ -314,10 +310,7 @@ function CalendarioPage() {
                     </td>
                     <td className="p-2">
                       {Object.keys(l.conflitos ?? {}).length > 0 && (
-                        <Badge variant="destructive" className="gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          {Object.keys(l.conflitos).length}
-                        </Badge>
+                        <ConflitosBadge conflitos={l.conflitos as Record<string, string>} />
                       )}
                     </td>
                   </tr>
@@ -355,6 +348,40 @@ function formatarCelula(chave: string, v: unknown): string {
   }
   if (typeof v === "string" || typeof v === "number") return String(v);
   return JSON.stringify(v);
+}
+
+// Fase 12.20 — Popover com os detalhes dos conflitos da linha. Antes o
+// badge só mostrava o número; agora clica pra ver quais campos + mensagem.
+function ConflitosBadge({ conflitos }: { conflitos: Record<string, string> }) {
+  const chaves = Object.keys(conflitos);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-800 hover:bg-red-500/20 dark:text-red-300"
+        >
+          <AlertTriangle className="h-3 w-3" />
+          {chaves.length}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96 p-0">
+        <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium">
+          {chaves.length === 1 ? "1 conflito" : `${chaves.length} conflitos`}
+        </div>
+        <ul className="max-h-80 divide-y overflow-y-auto">
+          {chaves.map((k) => (
+            <li key={k} className="p-3 text-xs">
+              <div className="font-medium text-red-800 dark:text-red-300">
+                {k.startsWith("_") ? "Aviso do motor" : k}
+              </div>
+              <div className="mt-1 text-muted-foreground">{conflitos[k]}</div>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 // Fase 8 — Badge + popover mostrando histórico de alterações da linha.

@@ -152,7 +152,9 @@ function AdminCalendarioPage() {
         .select("id, tenant_id, aba, ano, ordem, chave_natural, dados, comentarios")
         .eq("tenant_id", tenantId)
         .eq("aba", aba)
+        // Fase 12.19 — ordenar por codigo do curso + sequencia de captacao.
         .order("ano", { ascending: true })
+        .order("dados->>CÓD CURSO", { ascending: true })
         .order("ordem", { ascending: true })
         .limit(2000);
       if (error) throw error;
