@@ -27,16 +27,33 @@ interface Props {
   onSaved: () => void;
 }
 
-// Detecta campo de data (heurística): valor string ISO YYYY-MM-DD ou
-// chave contendo DATA/LIVE/QUESTIONÁRIO/CAPTAÇÃO.
+// Fase 12.9 — Detecta campo de data. Bug anterior: heuristica pegava
+// "LIVE" na chave e classificava DIA DA SEMANA DA LIVE (texto tipo
+// "QUINTA-FEIRA") como date picker. Correcao: lista explicita de
+// chaves textuais + checa se valor atual e ISO date. Nunca inferir
+// "campo de data" so pelo nome contendo LIVE/DATA/etc.
+const CHAVES_TEXTO = new Set([
+  "DIA DA SEMANA DA LIVE", "DIA DA SEMANA",
+  "TIPO DE OFERTA", "ENTRADA CAPTAÇÃO",
+  "ESCOLA", "SIGLA", "CURSO", "DISCIPLINA",
+  "CÓD CURSO", "CÓD. DO CURSO", "CÓDIGO DA TURMA", "CÓDIGO DA TURMA ",
+  "TURMA", "OFERTA",
+  "OBSERVAÇÕES", "Nº CHAMADO - FRESHDESK",
+]);
 function ehCampoDeData(chave: string, valor: unknown): boolean {
-  // "DIA DA SEMANA..." guarda texto (ex.: quarta-feira), nunca data — checar ANTES do "LIVE" abaixo, que bateria em "DIA DA SEMANA DA LIVE".
-    if (chave.toUpperCase().includes("DIA DA SEMANA")) return false;
-  const upper = chave.toUpperCase();
-  if (upper.includes("DATA") || upper.includes("LIVE") || upper.includes("QUESTIONÁRIO") || upper.includes("CAPTAÇÃO")) {
-    return true;
-  }
+  if (CHAVES_TEXTO.has(chave.trim())) return false;
   if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}/.test(valor)) return true;
+  // Se valor esta vazio, olha o nome da chave — mas exclui campos textuais.
+  if (!valor || valor === "") {
+    const upper = chave.toUpperCase();
+    if (upper.includes("DIA DA SEMANA") || upper.includes("TIPO") || upper.includes("OFERTA")) return false;
+    if (upper.includes("DATA") || upper.includes("LIVE") || upper.includes("QUESTIONÁRIO") || upper.includes("CAPTAÇÃO") ||
+        upper.includes("FECHAMENTO") || upper.includes("ENVIO") || upper.includes("PROVA") ||
+        upper.includes("PROTOCOLOS") || upper.includes("ENCERRAMENTO") || upper.includes("BASE PRONTA") ||
+        upper.includes("ENTREGA") || upper.includes("CORRE")) {
+      return true;
+    }
+  }
   return false;
 }
 

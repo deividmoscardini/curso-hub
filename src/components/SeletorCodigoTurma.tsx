@@ -30,6 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Search } from "lucide-react";
 import { normalizar } from "@/lib/similaridade";
 import { useT } from "@/contexts/i18n";
+import { formatarData } from "@/lib/formatar-data";
 
 export interface LinhaSelecionada {
   id: string;
@@ -72,7 +73,7 @@ export function SeletorCodigoTurma({
   onSelecionar,
   placeholder = "Digite código da turma ou nome da disciplina…",
 }: Props) {
-  const { t } = useT();
+  const { t, idioma } = useT();
   const [query, setQuery] = useState("");
   const [aberto, setAberto] = useState(false);
   const [soAtivas, setSoAtivas] = useState(true);
@@ -161,7 +162,33 @@ export function SeletorCodigoTurma({
             <div className="p-3 text-sm text-muted-foreground">Digite ao menos 2 caracteres.</div>
           )}
           {!carregando && queryNorm.length >= 2 && candidatos.length === 0 && (
-            <div className="p-3 text-sm text-muted-foreground">Nenhuma turma encontrada.</div>
+            <div className="p-3 text-sm text-muted-foreground">
+              <div>Nenhuma turma encontrada.</div>
+              {/* Fase 12.11 — fallback: permitir usar o texto digitado como codigo.
+                  Cria uma LinhaSelecionada sintetica com chave_natural="manual:<query>".
+                  O backend depois lida com casos em que a turma nao existe (retorna erro). */}
+              <button
+                type="button"
+                className="mt-2 w-full rounded border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-left text-xs hover:bg-primary/10"
+                onClick={() => {
+                  const codigoManual = query.trim();
+                  onSelecionar({
+                    id: `manual:${codigoManual}`,
+                    chave_natural: `manual:${codigoManual}`,
+                    ano: new Date().getFullYear(),
+                    ordem: 0,
+                    dados: { "CÓDIGO DA TURMA ": codigoManual },
+                  });
+                  setQuery(codigoManual);
+                  setAberto(false);
+                }}
+              >
+                <span className="font-medium text-primary">Usar &quot;{query.trim()}&quot; como código</span>
+                <div className="text-[10px] text-muted-foreground">
+                  Só use se souber o código exato — o aprovador precisa validar.
+                </div>
+              </button>
+            </div>
           )}
           {!carregando && candidatos.length > 0 && (
             <ul className="max-h-80 overflow-y-auto">
@@ -183,7 +210,10 @@ export function SeletorCodigoTurma({
                         <span className="font-mono text-xs">{codigo}</span>
                         {inicio && fim ? (
                           <span className={`text-[10px] ${ativa ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                            {t("solicitacao_nova.seletor_periodo", { inicio, fim })}
+                            {t("solicitacao_nova.seletor_periodo", {
+                              inicio: formatarData(inicio, idioma),
+                              fim: formatarData(fim, idioma),
+                            })}
                           </span>
                         ) : (
                           <span className="text-[10px] text-muted-foreground italic">
@@ -210,7 +240,10 @@ export function SeletorCodigoTurma({
               <span className="font-mono">{codigo}</span>
               {inicio && fim ? (
                 <span className="text-muted-foreground">
-                  {t("solicitacao_nova.seletor_periodo", { inicio, fim })}
+                  {t("solicitacao_nova.seletor_periodo", {
+                    inicio: formatarData(inicio, idioma),
+                    fim: formatarData(fim, idioma),
+                  })}
                 </span>
               ) : (
                 <span className="text-muted-foreground">Ano {selecionada.ano}</span>

@@ -280,7 +280,7 @@ function AuthenticatedLayout() {
               </div>
               <SeletorIdioma />
             </header>
-            <main className="flex-1 min-w-0 overflow-auto bg-muted/20 p-6">
+            <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden bg-muted/20 p-4 sm:p-6">
               <Outlet />
             </main>
           </div>

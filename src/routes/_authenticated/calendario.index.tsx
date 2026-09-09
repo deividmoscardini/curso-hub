@@ -6,7 +6,6 @@ import { useTenant } from "@/contexts/tenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { CalendarDays, AlertTriangle, History, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -23,14 +22,12 @@ import {
 import { formatarDataHora } from "@/lib/formatar-data";
 import { CalendarioFiltrosDrawer } from "@/components/calendario/CalendarioFiltrosDrawer";
 import { FiltroChips } from "@/components/calendario/FiltroChips";
-import { CAMPO } from "@/components/SeletorCodigoTurma";
 
 type Aba = "disciplinas" | "projeto_aplicacao" | "prova_substitutiva" | "fechamento";
 
 interface SearchParams {
   aba?: Aba;
   ano?: string;
-  q?: string;
   f?: string;
 }
 
@@ -46,7 +43,6 @@ export const Route = createFileRoute("/_authenticated/calendario/")({
   validateSearch: (s: Record<string, unknown>): SearchParams => ({
     aba: typeof s.aba === "string" && ABAS_VALIDAS.includes(s.aba as Aba) ? (s.aba as Aba) : undefined,
     ano: typeof s.ano === "string" ? s.ano : undefined,
-    q: typeof s.q === "string" ? s.q : undefined,
     f: typeof s.f === "string" ? s.f : undefined,
   }),
   component: CalendarioPage,
@@ -88,26 +84,24 @@ function CalendarioPage() {
   };
   // Fase 11.10 — Estado inicial vem da URL (deep-link). Escrever no
   // state também escreve na URL via useEffect abaixo.
+  // Fase 12.10 — busca global removida (Bruna: "não facilita a busca").
+  // Filtros por coluna via drawer cobrem o caso de uso.
   const [aba, setAba] = useState<Aba>(search.aba ?? "disciplinas");
-  const [busca, setBusca] = useState(search.q ?? "");
   const [anoFiltro, setAnoFiltro] = useState<string>(search.ano ?? "");
   const [filtros, setFiltros] = useState<FiltrosEstado>(() => decodeFiltros(search.f));
   const [drawerAberto, setDrawerAberto] = useState(false);
 
-  // Sync state → URL. `replace: true` mantém histórico limpo — cada
-  // digitada não vira uma nova entrada no back/forward do navegador.
   useEffect(() => {
     navigate({
       search: {
         aba: aba === "disciplinas" ? undefined : aba,
         ano: anoFiltro || undefined,
-        q: busca.trim() || undefined,
         f: encodeFiltros(filtros),
       },
       replace: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, busca, anoFiltro, filtros]);
+  }, [aba, anoFiltro, filtros]);
 
   const { data: linhas, isLoading } = useQuery({
     queryKey: ["calendario", tenantId, aba],
@@ -155,18 +149,8 @@ function CalendarioPage() {
   const filtradas = useMemo(() => {
     let l: Linha[] = linhas ?? [];
     if (anoFiltro) l = l.filter((r) => String(r.ano) === anoFiltro);
-    if (busca.trim()) {
-      const q = busca.trim().toLowerCase();
-      // Fase QA 2026-09 — busca restrita a código da turma, disciplina e
-      // curso (não mais o jsonb inteiro), que fazia a busca "achar" a
-      // turma errada ao casar com datas, comentários e outros campos.
-      l = l.filter((r) => {
-        const blob = `${CAMPO.codigoTurma(r.dados)} ${CAMPO.disciplina(r.dados)} ${CAMPO.curso(r.dados)}`.toLowerCase();
-        return blob.includes(q);
-      });
-    }
     return aplicarFiltros(l, filtros, DEFS_POR_ABA[aba as AbaCalendario]) as Linha[];
-  }, [linhas, anoFiltro, busca, filtros, aba]);
+  }, [linhas, anoFiltro, filtros, aba]);
 
   const nFiltros = useMemo(() => contarFiltrosAtivos(filtros), [filtros]);
 
@@ -204,7 +188,10 @@ function CalendarioPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      {/* Fase 12.13 — Cards KPI responsivos: 2 col em tablet, 4 em desktop.
+          Antes era 1 col em mobile, 4 direto em md (quebrava o layout em
+          telas 768-1024). */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {(Object.keys(ABA_LABEL_LOCAL) as Aba[]).map((a) => (
           <Card key={a} className={aba === a ? "border-primary" : ""}>
             <CardHeader className="pb-2">
@@ -221,20 +208,16 @@ function CalendarioPage() {
       </div>
 
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
-        <TabsList>
+        {/* Fase 12.13 — TabsList com overflow-x pra caber "Prova Substitutiva" e
+            "Fechamento de turmas" em telas estreitas sem quebrar layout. */}
+        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
           {(Object.keys(ABA_LABEL_LOCAL) as Aba[]).map((a) => (
-            <TabsTrigger key={a} value={a}>{ABA_LABEL_LOCAL[a]}</TabsTrigger>
+            <TabsTrigger key={a} value={a} className="whitespace-nowrap">{ABA_LABEL_LOCAL[a]}</TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder={t("calendario.busca_placeholder")}
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="max-w-xs"
-        />
         <select
           value={anoFiltro}
           onChange={(e) => setAnoFiltro(e.target.value)}
