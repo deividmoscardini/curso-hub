@@ -647,6 +647,57 @@ Deno.serve(async (req: Request) => {
         };
       }
 
+      // Fase 12.24 — Propaga alteração de live pra todas as linhas do tenant
+      // com o MESMO CÓDIGO DA TURMA (disciplinas compartilhadas C aparecem
+      // em vários cursos). Bruna: "altera só pro curso selecionado, mas
+      // deveria alterar em relação ao código da turma".
+      if (solTyped.tipo === "alterar_data_live") {
+        const { data: linhaOrigem } = await sbAdmin
+          .from("calendario_linhas")
+          .select("dados")
+          .eq("tenant_id", solicitacao.tenant_id)
+          .eq("chave_natural", payload.chave_natural)
+          .single();
+        const codigoTurma = (linhaOrigem?.dados as Record<string, unknown> | null)?.["CÓDIGO DA TURMA "]
+          ?? (linhaOrigem?.dados as Record<string, unknown> | null)?.["CÓDIGO DA TURMA"] ?? null;
+        if (codigoTurma) {
+          const { data: outras } = await sbAdmin
+            .from("calendario_linhas")
+            .select("chave_natural, dados")
+            .eq("tenant_id", solicitacao.tenant_id)
+            .eq("aba", "disciplinas")
+            .neq("chave_natural", payload.chave_natural);
+          const irmas = (outras ?? []).filter((r) => {
+            const d = r.dados as Record<string, unknown>;
+            return (d["CÓDIGO DA TURMA "] ?? d["CÓDIGO DA TURMA"]) === codigoTurma;
+          });
+          const novoDiaSemana = labelDiaSemana(payload.nova_data);
+          let propagadas = 0;
+          for (const irma of irmas) {
+            const ok1 = await aplicarMudancaEmLinha(sbAdmin, {
+              tenant_id: solicitacao.tenant_id,
+              chave_natural: irma.chave_natural,
+              campo: payload.campo,
+              novo_valor: payload.nova_data,
+              motivo: `${payload.motivo} (propagação automática por código da turma ${codigoTurma})`,
+              solicitacao_id: solicitacao.id,
+              autor_id: userId,
+            });
+            await aplicarMudancaEmLinha(sbAdmin, {
+              tenant_id: solicitacao.tenant_id,
+              chave_natural: irma.chave_natural,
+              campo: "DIA DA SEMANA DA LIVE",
+              novo_valor: novoDiaSemana,
+              motivo: `${payload.motivo} (recálculo automático do dia da semana propagado por código da turma)`,
+              solicitacao_id: solicitacao.id,
+              autor_id: userId,
+            });
+            if (ok1.ok) propagadas++;
+          }
+          logDepois = { ...logDepois, propagadas_por_codigo_turma: propagadas };
+        }
+      }
+
       // Subtipo B/termino: também atualiza campo de atividade (mesma linha).
       // Regra da Bruna: término da disciplina = término da entrega da atividade.
       if (solTyped.tipo === "alterar_data_termino") {

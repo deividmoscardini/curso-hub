@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 import { useT } from "@/contexts/i18n";
 import { SeletorIdioma } from "@/components/SeletorIdioma";
 
@@ -33,6 +34,28 @@ function AuthPage() {
   const [senha, setSenha] = useState("");
   const [nome, setNome] = useState("");
   const [loading, setLoading] = useState(false);
+  // Fase 12.17 — toggle "ver senha" + reset via email
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [resetando, setResetando] = useState(false);
+
+  async function handleResetSenha() {
+    if (!email) {
+      toast.error(t("auth.reset_precisa_email") ?? "Digite seu e-mail acima antes.");
+      return;
+    }
+    setResetando(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+    setResetando(false);
+    if (error) {
+      toast.error(t("auth.reset_falha") ?? "Não foi possível enviar", { description: error.message });
+      return;
+    }
+    toast.success(t("auth.reset_enviado") ?? "Link de redefinição enviado", {
+      description: t("auth.reset_enviado_desc") ?? `Verifique a caixa de entrada de ${email}.`,
+    });
+  }
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_e, session) => {
@@ -108,8 +131,35 @@ function AuthPage() {
                     <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="senha">{t("auth.senha")}</Label>
-                    <Input id="senha" type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="senha">{t("auth.senha")}</Label>
+                      <button
+                        type="button"
+                        onClick={handleResetSenha}
+                        disabled={resetando}
+                        className="text-xs text-primary hover:underline disabled:opacity-50"
+                      >
+                        {resetando ? (t("auth.reset_enviando") ?? "Enviando…") : t("auth.esqueci_senha")}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Input
+                        id="senha"
+                        type={mostrarSenha ? "text" : "password"}
+                        required
+                        value={senha}
+                        onChange={(e) => setSenha(e.target.value)}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMostrarSenha((v) => !v)}
+                        aria-label={mostrarSenha ? t("auth.esconder_senha") ?? "Esconder" : t("auth.mostrar_senha") ?? "Mostrar"}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                      >
+                        {mostrarSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? t("auth.entrando") : t("auth.entrar")}
@@ -129,7 +179,25 @@ function AuthPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="senha-cad">{t("auth.senha")}</Label>
-                    <Input id="senha-cad" type="password" required minLength={6} value={senha} onChange={(e) => setSenha(e.target.value)} />
+                    <div className="relative">
+                      <Input
+                        id="senha-cad"
+                        type={mostrarSenha ? "text" : "password"}
+                        required
+                        minLength={6}
+                        value={senha}
+                        onChange={(e) => setSenha(e.target.value)}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMostrarSenha((v) => !v)}
+                        aria-label={mostrarSenha ? t("auth.esconder_senha") ?? "Esconder" : t("auth.mostrar_senha") ?? "Mostrar"}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                      >
+                        {mostrarSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? t("auth.cadastrando") : t("auth.cadastrar")}

@@ -18,6 +18,7 @@ import { TIPOS_CURSO_ORDENADOS, validarChMinima, type TipoCurso } from "@/lib/re
 import { normalizar } from "@/lib/similaridade";
 import { SeletorCodigoTurma, CAMPO, livesDaLinha, type LinhaSelecionada } from "@/components/SeletorCodigoTurma";
 import { useT } from "@/contexts/i18n";
+import { formatarData } from "@/lib/formatar-data";
 
 export const Route = createFileRoute("/_authenticated/solicitacoes/nova")({
   head: () => ({ meta: [{ title: "Nova solicitação" }] }),
@@ -670,7 +671,7 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
 // obrigatório em toda alteração de data).
 
 function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
-  const { t } = useT();
+  const { t, idioma } = useT();
   const qc = useQueryClient();
   const [linha, setLinha] = useState<LinhaSelecionada | null>(null);
   const [trocarProf, setTrocarProf] = useState(false);
@@ -737,7 +738,7 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
               <SelectContent>
                 {lives.map((l) => (
                   <SelectItem key={l.campo} value={l.campo}>
-                    {l.label} {l.valor ? `— ${t("solicitacao_nova.live_hoje", { data: l.valor })}` : t("solicitacao_nova.live_sem_data")}
+                    {l.label} {l.valor ? `— ${t("solicitacao_nova.live_hoje", { data: formatarData(l.valor, idioma) })}` : t("solicitacao_nova.live_sem_data")}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -753,7 +754,7 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
           </Campo>
         </div>
         {inicio && fim && (
-          <div className="text-xs text-muted-foreground">{t("solicitacao_nova.periodo_disciplina", { inicio, fim })}</div>
+          <div className="text-xs text-muted-foreground">{t("solicitacao_nova.periodo_disciplina", { inicio: formatarData(inicio, idioma), fim: formatarData(fim, idioma) })}</div>
         )}
 
         {/* Antecipação: bloqueia direto. */}
@@ -772,7 +773,7 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <div className="flex-1">
                 <div className="font-semibold">{t("solicitacao_nova.live_fora_titulo")}</div>
-                <div className="mt-0.5">{t("solicitacao_nova.live_fora_desc", { dias: diasAlem, termino: fim })}</div>
+                <div className="mt-0.5">{t("solicitacao_nova.live_fora_desc", { dias: diasAlem, termino: formatarData(fim, idioma) })}</div>
                 {!confirmarProrrogacao && (
                   <Button
                     type="button" size="sm" variant="outline"
