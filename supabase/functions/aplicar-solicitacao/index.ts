@@ -380,12 +380,25 @@ Deno.serve(async (req: Request) => {
         if (eDisc) return json(500, { error: `Falha ao criar disciplinas: ${eDisc.message}` });
       }
 
-      // Se o wizard incluiu prévia (o motor rodou pra gerar as ofertas do
-      // ano de estreia junto com o cadastro), grava as linhas em
-      // calendario_linhas apontando pro novo curso_id.
+      // Fase 12.12 — Materializa as linhas do calendario para o ano de
+      // estreia. Antes: dependia de `previa.linhas` vir preenchida no
+      // payload (form ja rodava o motor). Bug reportado pela Bruna:
+      // 3 de 4 solicitacoes recentes de novo_curso tinham previa NULL —
+      // curso aprovado, mas calendario vazio.
+      //
+      // Fix: se previa esta vazia mas o payload tem `data_inicio_e1` +
+      // `ano_estreia` + disciplinas, gera linhas MINIMAS aqui (so ANO,
+      // ORDEM, DISCIPLINA, CH, TIPO, DATA INICIO derivada por +21 dias).
+      // O admin depois roda "Recalcular datas do ano" em /admin/calendario
+      // pra o motor completar as demais colunas (LIVE 1, LIVE 2, etc.).
       let linhasGravadas = 0;
       const previaLinhas = ((solTyped.previa as { linhas?: unknown[] } | null)?.linhas) ?? [];
+      const anoAlvo: number | null = solTyped.ano ??
+        (payload.ano_estreia != null ? Number(payload.ano_estreia) : null);
+      const anoNumerico = anoAlvo != null && !Number.isNaN(anoAlvo) ? anoAlvo : null;
+
       if (previaLinhas.length > 0 && solTyped.aba === "disciplinas" && solTyped.ano) {
+        // Caminho antigo: front rodou o motor e enviou linhas prontas.
         const rows = (previaLinhas as any[]).map((linha) => {
           const { conflitos, ...dados } = linha;
           return {
@@ -399,6 +412,69 @@ Deno.serve(async (req: Request) => {
             dados, conflitos: conflitos ?? {},
           };
         });
+        const { error: eLinhas } = await sbAdmin.from("calendario_linhas")
+          .upsert(rows, { onConflict: "tenant_id,chave_natural" });
+        if (eLinhas) return json(500, { error: `Falha ao gravar ofertas: ${eLinhas.message}` });
+        linhasGravadas = rows.length;
+      } else if (payload.data_inicio_e1 && anoNumerico) {
+        // Fallback: previa vazia — gera linhas minimas do motor local (data
+        // base + carrossel). Demais colunas ficam null; admin roda
+        // "Recalcular datas do ano" na tela /admin/calendario depois.
+        const N_ENTRADAS = 16;
+        const INTERVALO = 21;
+        const disciplinasPayload = (payload.disciplinas ?? []) as Array<{
+          ordem?: number; nome?: string; ch?: number | null; tipo_oferta?: string;
+        }>;
+        const tamanhoCarrossel = Math.max(disciplinasPayload.length, 1);
+
+        function addDaysISO(iso: string, days: number): string {
+          const [y, m, d] = iso.split("-").map(Number);
+          const dt = new Date(Date.UTC(y, m - 1, d));
+          dt.setUTCDate(dt.getUTCDate() + days);
+          return dt.toISOString().slice(0, 10);
+        }
+
+        const rows: Array<Record<string, unknown>> = [];
+        for (let i = 0; i < N_ENTRADAS; i++) {
+          const entradaNum = i + 1;
+          const dataInicio = addDaysISO(String(payload.data_inicio_e1), INTERVALO * i);
+          const ordemCarrossel = (i % tamanhoCarrossel) + 1;
+          const disc = disciplinasPayload.find((d) => (d.ordem ?? 0) === ordemCarrossel)
+            ?? disciplinasPayload[i % tamanhoCarrossel];
+          const dados: Record<string, unknown> = {
+            "ANO": anoNumerico,
+            "ENTRADA CAPTAÇÃO": `E${entradaNum}`,
+            "INÍCIO CAPTAÇÃO": payload.captacao_inicio_e1 ? addDaysISO(String(payload.captacao_inicio_e1), INTERVALO * i) : null,
+            "TÉRMINO CAPTAÇÃO": null,
+            "ESCOLA": payload.escola ?? "-",
+            "SIGLA": sigla,
+            "CÓD CURSO": codigo,
+            "CURSO": payload.nome ?? "",
+            "ORDEM DA DISCIPLINA": ordemCarrossel,
+            "DISCIPLINA": disc?.nome ?? null,
+            "CÓDIGO DA TURMA ": null,
+            "TIPO DE OFERTA": disc?.tipo_oferta ?? "A",
+            "CH": disc?.ch ?? null,
+            "DATA  INÍCIO": dataInicio,
+            "DATA FIM ": null,
+            "DIA DA SEMANA DA LIVE": "QUINTA-FEIRA",
+            "LIVE ESTUDO DE CASO (SEMANA 2)": null,
+            "LIVE DE FECHAMENTO (SEMANA 3)": null,
+            "QUESTIONÁRIO (SEMANA 4)": null,
+          };
+          rows.push({
+            tenant_id: solicitacao.tenant_id,
+            aba: "disciplinas",
+            ano: anoNumerico,
+            ordem: entradaNum,
+            curso_id: cursoIns.id,
+            disciplina_id: null,
+            chave_natural: `disciplinas-${anoNumerico}-${cursoIns.codigo}-E${entradaNum}-${ordemCarrossel}`,
+            dados,
+            conflitos: { _sem_motor: "Linha criada sem prévia — rode 'Recalcular datas do ano' em /admin/calendario pra popular LIVE 1, LIVE 2, QUESTIONÁRIO e demais colunas derivadas." },
+          });
+        }
+
         const { error: eLinhas } = await sbAdmin.from("calendario_linhas")
           .upsert(rows, { onConflict: "tenant_id,chave_natural" });
         if (eLinhas) return json(500, { error: `Falha ao gravar ofertas: ${eLinhas.message}` });
