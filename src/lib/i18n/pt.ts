@@ -204,6 +204,8 @@ export const pt = {
     captacao_e2: "Início da 2ª janela de captação",
     captacao_e2_desc: "Data em que a captação da E2 começa. Deixe em branco pra usar o padrão do motor (21 dias depois).",
     enviar_solicitacao: "Enviar solicitação",
+    enviar_e_adicionar_outra: "Enviar e adicionar outra turma",
+    enviada_pronto_outra: "Enviada. Escolha a próxima turma com o mesmo motivo.",
     // Alteração de data
     turma: "Turma *",
     turma_placeholder: "Digite código da turma ou nome da disciplina…",

@@ -105,6 +105,57 @@ export function CalendarioEditModal({ linha, onClose, onSaved }: Props) {
       .eq("id", linha.id);
     if (error) { setPending(false); toast.error(t("solicitacao_nova.falha_criar"), { description: error.message }); return; }
 
+    // Fase 12.16 — Propagacao do CODIGO DA TURMA pra outras linhas.
+    // Bruna (18/set/2026): "sempre que houver uma alteracao no codigo
+    // da turma, ajustar em todos os cursos". Regra: se admin alterou
+    // um dos campos de codigo da turma, buscar todas as linhas em
+    // calendario_linhas cujo dados tem o codigo ANTIGO e trocar pelo
+    // NOVO. Cobre disciplinas compartilhadas tipo "C" que aparecem
+    // em varios cursos com a mesma turma.
+    const camposCodigoTurma = alterados.filter((c) => c.trim() === "CÓDIGO DA TURMA");
+    let linhasPropagadas = 0;
+    for (const campo of camposCodigoTurma) {
+      const codigoAntigo = String((linha.dados as Record<string, unknown>)[campo] ?? "").trim();
+      const codigoNovo = String(novosDados[campo] ?? "").trim();
+      if (!codigoAntigo || !codigoNovo || codigoAntigo === codigoNovo) continue;
+
+      // Busca outras linhas do MESMO tenant cujo dados contenha o codigo
+      // antigo em qualquer variante de chave (com/sem trailing space).
+      const { data: outras } = await supabase
+        .from("calendario_linhas")
+        .select("id, dados, comentarios")
+        .eq("tenant_id", linha.tenant_id)
+        .neq("id", linha.id)
+        .or(`dados->>CÓDIGO DA TURMA .eq.${codigoAntigo},dados->>CÓDIGO DA TURMA.eq.${codigoAntigo}`);
+      for (const outra of outras ?? []) {
+        const dadosOutra = { ...(outra.dados as Record<string, unknown>) };
+        let atualizou = false;
+        for (const chaveCod of ["CÓDIGO DA TURMA ", "CÓDIGO DA TURMA"]) {
+          if (String(dadosOutra[chaveCod] ?? "").trim() === codigoAntigo) {
+            dadosOutra[chaveCod] = codigoNovo;
+            atualizou = true;
+          }
+        }
+        if (!atualizou) continue;
+        const eventosOutra = [...(Array.isArray(outra.comentarios) ? outra.comentarios : []), {
+          criado_em: new Date().toISOString(),
+          autor_id: uid,
+          motivo: `${motivo.trim()} (propagação automática do código da turma ${codigoAntigo} → ${codigoNovo})`,
+          tipo: "admin_edit" as const,
+          campo_alterado: campo,
+          valor_anterior: codigoAntigo,
+          valor_novo: codigoNovo,
+        }];
+        await supabase.from("calendario_linhas")
+          .update({ dados: dadosOutra, comentarios: eventosOutra })
+          .eq("id", outra.id);
+        linhasPropagadas++;
+      }
+    }
+    if (linhasPropagadas > 0) {
+      toast.success(`Código da turma propagado em ${linhasPropagadas} outra(s) linha(s).`);
+    }
+
     await supabase.from("log_auditoria").insert({
       tenant_id: linha.tenant_id, ator_id: uid,
       acao: "calendario.admin_edit", entidade: "calendario_linhas", entidade_id: linha.id,

@@ -671,11 +671,13 @@ function FormNovoCurso({ tenantId, onDone }: { tenantId: string; onDone: (id: st
 
 function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (id: string) => void }) {
   const { t } = useT();
+  const qc = useQueryClient();
   const [linha, setLinha] = useState<LinhaSelecionada | null>(null);
   const [trocarProf, setTrocarProf] = useState(false);
   const [profNome, setProfNome] = useState("");
   const [profEmail, setProfEmail] = useState("");
   const [profNotas, setProfNotas] = useState("");
+  const [enviandoOutra, setEnviandoOutra] = useState(false);
   // Fase 8.12 — Pedido combo: quando nova_data > fim, solicitante confirma
   // que quer prorrogar o término da disciplina junto. Só então revela o
   // campo novoTermino, e o pedido vira combo (live + término em 1 pedido).
@@ -827,7 +829,56 @@ function FormAlterarDataLive({ tenantId, onDone }: { tenantId: string; onDone: (
           )}
         </div>
 
-        <div className="flex justify-end">
+        {/* Fase 12.14 — Multi-turma: um botao envia e navega pro detalhe
+            (comportamento antigo). O outro envia e limpa SO turma/campo/
+            data — mantem motivo pra o solicitante replicar em outras
+            turmas com o mesmo motivo. Bruna: "permitir selecionar mais
+            de uma turma nas solicitacoes de alteracao de data". */}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant="outline"
+            disabled={!podeEnviar || mut.isPending || enviandoOutra}
+            onClick={async () => {
+              setEnviandoOutra(true);
+              try {
+                await criarSolicitacao({
+                  tenant_id: tenantId, tipo: "alterar_data_live",
+                  aba: "disciplinas", ano: linha!.ano,
+                  payload: {
+                    chave_natural: linha!.chave_natural,
+                    campo, nova_data: novaData,
+                    data_anterior: dataAtualLive || null,
+                    disciplina_nome: disciplinaNome || null,
+                    motivo: motivo.trim(),
+                    ...(depoisDoFim && confirmarProrrogacao && novoTerminoValido && {
+                      combo_prorrogar_termino: true,
+                      novo_termino_disciplina: novoTermino,
+                      termino_anterior: fim ?? null,
+                    }),
+                    ...(trocarProf && {
+                      trocar_docente: true,
+                      novo_docente: {
+                        nome: profNome.trim(),
+                        email: profEmail.trim() || null,
+                        notas: profNotas.trim() || null,
+                      },
+                    }),
+                  },
+                });
+                qc.invalidateQueries();
+                setLinha(null); setCampo(""); setNovaData(""); setNovoTermino("");
+                setConfirmarProrrogacao(false);
+                toast.success(t("solicitacao_nova.enviada_pronto_outra") ?? "Enviada. Escolha a próxima turma.");
+              } catch (err) {
+                toast.error(t("solicitacao_nova.falha_criar"), { description: err instanceof Error ? err.message : String(err) });
+              } finally {
+                setEnviandoOutra(false);
+              }
+            }}
+          >
+            {enviandoOutra ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /></> : null}
+            {t("solicitacao_nova.enviar_e_adicionar_outra") ?? "Enviar e adicionar outra turma"}
+          </Button>
           <Button disabled={!podeEnviar || mut.isPending} onClick={() => mut.mutate({
             tenant_id: tenantId, tipo: "alterar_data_live",
             aba: "disciplinas", ano: linha!.ano,

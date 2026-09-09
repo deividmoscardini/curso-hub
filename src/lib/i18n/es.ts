@@ -204,6 +204,8 @@ export const es: Dicionario = {
     captacao_e2: "Inicio de la 2da ventana de captación",
     captacao_e2_desc: "Fecha en que la captación de E2 comienza. Deja en blanco para usar el estándar del motor (21 días después).",
     enviar_solicitacao: "Enviar solicitud",
+    enviar_e_adicionar_outra: "Enviar y agregar otra clase",
+    enviada_pronto_outra: "Enviada. Elige la próxima clase con el mismo motivo.",
     turma: "Grupo *",
     turma_placeholder: "Escribe el código del grupo o el nombre de la asignatura…",
     qual_live: "¿Cuál live? *",
